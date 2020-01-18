@@ -1,0 +1,6 @@
+scapy>=2.4.0
+matplotlib
+networkx
+maxminddb
+pygraphviz
+ipwhois
