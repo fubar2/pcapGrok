@@ -9,7 +9,7 @@ from scapy.layers.http import HTTP
 # make this global so we can use it for tests
 
 parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
-parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap',required=True)
+parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap')
 parser.add_argument('-o', '--out', help='Each topology will be drawn and saved using this filename stub. Use a .pdf or .png filename extension to specify image type')
 parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)')
 parser.add_argument('--layer2', action='store_true', help='Device (mac address) topology network graph')

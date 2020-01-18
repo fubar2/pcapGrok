@@ -1,7 +1,7 @@
 import unittest
 import sys
 import os
-from argparse import ArgumentParser
+
 # finesse the imports - ugh - so we can run from the tests directory
 
 PACKAGE_PARENT = '..'
@@ -13,27 +13,29 @@ from pcapviz.sources import ScapySource
 
 import os
 
-parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
-parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap')
-parser.add_argument('-o', '--out', help='Each topology will be drawn and saved using this filename stub. Use a .pdf or .png filename extension to specify image type')
-parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)')
-parser.add_argument('--layer2', action='store_true', help='Device (mac address) topology network graph')
-parser.add_argument('--layer3', action='store_true', help='IP layer message graph. Default')
-parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph')
-parser.add_argument('-d','--DEBUG', action='store_true', help='Show debug messages and other (sometimes) very useful data')
-parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
-parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP')
-parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
-parser.add_argument('-fi', '--frequent-in', action='store_true', help='Print frequently contacted nodes to stdout')
-parser.add_argument('-fo', '--frequent-out', action='store_true', help='Print frequent source nodes to stdout')
-parser.add_argument('-G', '--geopath', default='/usr/share/GeoIP/GeoLite2-City.mmdb', help='Path to maxmind geodb data')
-parser.add_argument('-l', '--geolang', default='en', help='Language to use for geoIP names')
-parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method - dot, sfdp etc.')
-parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
-parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
-parser.add_argument('-a', '--append', action='store_true',default=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
+from main import args
 
-args = parser.parse_args()
+# parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
+# parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap')
+# parser.add_argument('-o', '--out', help='Each topology will be drawn and saved using this filename stub. Use a .pdf or .png filename extension to specify image type')
+# parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)')
+# parser.add_argument('--layer2', action='store_true', help='Device (mac address) topology network graph')
+# parser.add_argument('--layer3', action='store_true', help='IP layer message graph. Default')
+# parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph')
+# parser.add_argument('-d','--DEBUG', action='store_true', help='Show debug messages and other (sometimes) very useful data')
+# parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
+# parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP')
+# parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
+# parser.add_argument('-fi', '--frequent-in', action='store_true', help='Print frequently contacted nodes to stdout')
+# parser.add_argument('-fo', '--frequent-out', action='store_true', help='Print frequent source nodes to stdout')
+# parser.add_argument('-G', '--geopath', default='/usr/share/GeoIP/GeoLite2-City.mmdb', help='Path to maxmind geodb data')
+# parser.add_argument('-l', '--geolang', default='en', help='Language to use for geoIP names')
+# parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method - dot, sfdp etc.')
+# parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
+# parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
+# parser.add_argument('-a', '--append', action='store_true',default=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
+
+# args = parser.parse_args()
 
 class PcapProcessingTests(unittest.TestCase):
 
