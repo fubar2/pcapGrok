@@ -23,6 +23,7 @@ import os
 import socket
 import maxminddb
 from ipwhois import IPWhois
+from ipwhois import IPDefinedError
 
 deeNS = {}
 
@@ -79,10 +80,13 @@ class GraphManager(object):
 		if kname == None:
 			kname = socket.getfqdn(ip)
 			if kname == ip:
-				who = IPWhois(ip)
-				qry = who.lookup_rdap(depth=1)
-				kname = qry['asn_description']
-				deeNS[ip] = kname
+				try:
+					who = IPWhois(ip)
+					qry = who.lookup_rdap(depth=1)
+					kname = qry['asn_description']
+					deeNS[ip] = kname
+				except IPDefinedError:
+					kname = '(LAN address? Not in local hosts file)'
 				if self.args.DEBUG:
 					print('## looked up',ip,'and have',kname)
 		if kname == None:
@@ -103,7 +107,7 @@ class GraphManager(object):
 		sorted_degrees = OrderedDict(sorted(list(unsorted_degrees), key=lambda t: t[1], reverse=True))
 		for i in sorted_degrees:
 			if print_stdout:
-				nn = self.lookup(i)
+				nn = self.iplookup(i)
 				if (nn == i):
 					print(sorted_degrees[i], i)
 				else:
