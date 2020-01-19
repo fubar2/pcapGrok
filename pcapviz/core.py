@@ -25,23 +25,25 @@ import maxminddb
 from ipwhois import IPWhois
 from ipwhois import IPDefinedError
 
-deeNS = {}
-
 class GraphManager(object):
 	""" Generates and processes the graph based on packets
 	"""
 
-	def __init__(self, packets, layer=3, args=None):
+	def __init__(self, packets, layer, args, dnsCACHE):
+		assert layer in [2,3,4],'###GraphManager __init__ got layer = %s. Must be 2,3 or 4' % str(layer)
+		assert len(packets) > 0, '###GraphManager __init__ got empty packets list - nothing useful can be done'
 		self.graph = DiGraph()
 		self.layer = layer
 		self.geo_ip = None
 		self.args = args
 		self.data = {}
+		self.dnsCACHE = dnsCACHE
 		self.title = 'Title goes here'
 		try:
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
 		except:
-			logging.warning("could not load GeoIP data from supplied parameter geopath %s" % self.args.geopath)
+			if self.args.DEBUG:
+				print("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
 		if self.args.restrict:
 			packetsr = [x for x in packets if ((x[0].src in self.args.restrict) or (x[0].dst in self.args.restrict))]
 			if len(packetsr) == 0:
@@ -68,31 +70,10 @@ class GraphManager(object):
 				self.graph[src][dst]['packets'] = [packet]
 
 		for node in self.graph.nodes():
-			self._retrieve_node_info(node)
+			self._retrieve_node_info(node,packet)
 
 		for src, dst in self.graph.edges():
 			self._retrieve_edge_info(src, dst)
-
-
-	def iplookup(self,ip):
-		"""deeNS caches all slow! fqdn reverse dns lookups from ip"""
-		kname = deeNS.get(ip,None)
-		if kname == None:
-			kname = socket.getfqdn(ip)
-			if kname == ip:
-				try:
-					who = IPWhois(ip)
-					qry = who.lookup_rdap(depth=1)
-					kname = qry['asn_description']
-					deeNS[ip] = kname
-				except IPDefinedError:
-					kname = '(LAN address? Not in local hosts file)'
-				if self.args.DEBUG:
-					print('## looked up',ip,'and have',kname)
-		if kname == None:
-			kname = ip
-			deeNS[ip] = kname
-		return (kname)
 
 
 	def get_in_degree(self, print_stdout=True):
@@ -114,18 +95,29 @@ class GraphManager(object):
 					print(sorted_degrees[i],i,nn)
 		return sorted_degrees
 
-	def _retrieve_node_info(self, node):
+
+	def _retrieve_node_info(self, node, packet):				
+		"""cache all (slow!) fqdn reverse dns lookups from ip"""
 		self.data[node] = {}
-		city = None
-		country = None
-		if self.layer >= 3 and self.geo_ip:
-			if self.layer == 3:
-				self.data[node]['ip'] = node
-			elif self.layer == 4:
-				self.data[node]['ip'] = node.split(':')[0]
-			node_ip = self.data[node]['ip']
-			try:
-				mmdbrec = self.geo_ip.get(node_ip)
+		drec = {'fqdname':None,'whoname':None,'city':None,'country':None,'mac':None}
+		ns = node.split(':')
+		if len(ns) <= 2: # has a port - not a mac or ipv6 address
+			ip = ns[0]
+		else:
+			ip = node
+		if packet[0].src:
+			mac = packet[0].src
+		else:
+			mac = None
+		ddict = self.dnsCACHE.get(ip,None)
+		if ddict == None: # never seen
+			ddict = copy.copy(drec)
+			if mac != None:
+				ddict['mac'] = mac
+			city = ''
+			country = ''
+			if self.geo_ip and (':' not in ip):			
+				mmdbrec = self.geo_ip.get(ip)
 				if mmdbrec != None:
 					countryrec = mmdbrec.get('city',None)
 					cityrec = mmdbrec.get('country',None)
@@ -133,11 +125,31 @@ class GraphManager(object):
 						country = countryrec['names'].get(self.args.geolang,None)
 					if cityrec:
 						city =  cityrec['names'].get(self.args.geolang,None)
-				self.data[node]['country'] = country if country else 'private'
-				self.data[node]['city'] = city if city else 'private'
-			except:
-				logging.debug("could not load GeoIP data for node %s" % node_ip)
-				
+				else:
+					if self.args.DEBUG:
+						print("could not load GeoIP data for ip %s" % ip)
+			ddict['city'] = city
+			ddict['country'] = country
+			if not (':' in ip):
+				fqdname = socket.getfqdn(ip)
+				if self.args.DEBUG:
+					print('##ip',ip,' = fqdname',fqdname)
+				ddict['fqdname'] = fqdname
+				try:
+					who = IPWhois(ip)
+					qry = who.lookup_rdap(depth=1)
+					whoname = qry['asn_description']
+				except IPDefinedError:
+					whoname = '(Private LAN address)'
+				ddict['whoname'] = whoname
+				fullname = '%s\n%s' % (fqdname,whoname)
+			else:
+				ddict['fqdname'] = ''
+			self.dnsCACHE[ip] = ddict
+			if self.args.DEBUG:
+				print('## looked up',ip,'and added',ddict)
+
+
 
 	def _retrieve_edge_info(self, src, dst):
 		edge = self.graph[src][dst]
@@ -186,32 +198,39 @@ class GraphManager(object):
 				# node might be deleted, because it's not legit etc.
 				continue
 			snode = str(node)
-			nnode = snode
 			ssnode = snode.split(':') # look for mac or a port on the ip
 			if len(ssnode) <= 2:
-				nnode = self.iplookup(ssnode[0])
-			
+				ip = ssnode[0]
+				ddict = self.dnsCACHE[ip]
+			else:
+				ip = snode
+				ddict = self.dnsCACHE[snode] 
 			node.attr['shape'] = self.args.shape
-			node.attr['fontsize'] = '10'
+			node.attr['fontsize'] = '11'
 			node.attr['width'] = '0.5'
-			node.attr['color'] = 'linen'
+			node.attr['color'] = 'powderblue' # assume all are local hosts
 			node.attr['style'] = 'filled,rounded'
-			if 'country' in self.data[snode]:
-				country_label = self.data[snode]['country']
-				city_label = self.data[snode]['city']
-				if nnode != snode:
-					nodelab = '%s\n%s' % (nnode,snode)
-				else:
-					nodelab = snode
-				if country_label != 'private':
-					if city_label == 'private':
-						nodelab += "\n(%s)" % (country_label)
-					else:
-						nodelab += "\n(%s, %s)" % (city_label, country_label)
-				node.attr['label'] = nodelab
-				if not (country_label == 'private'):
-					node.attr['color'] = 'lightyellow'
-					#TODO add color based on country or scan?
+			country = ddict['country']
+			city = ddict['city']
+			fqdname = ddict['fqdname']
+			mac = ddict['mac']
+			whoname = ddict['whoname']
+			if whoname != None and whoname != '(Private LAN address)':
+				node.attr['color'] = 'violet' # remote hosts
+			nodelabel = [ip,]
+			if fqdname > '' and fqdname != ip:
+				nodelabel.append('\n')
+				nodelabel.append(fqdname)
+			if city > '' or country > '':
+				nodelabel.append('\n')
+				nodelabel.append('%s, %s' % (city,country))
+			if whoname and whoname > '':
+				nodelabel.append('\n')
+				nodelabel.append(whoname)
+			ns = ''.join(nodelabel)
+			node.attr['label'] = ns
+			
+			
 		for edge in graph.edges():
 			connection = self.graph[edge[0]][edge[1]]
 			edge.attr['label'] = 'transmitted: %i bytes\n%s ' % (connection['transmitted'], ' | '.join(connection['layers']))

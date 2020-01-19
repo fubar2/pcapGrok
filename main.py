@@ -4,9 +4,16 @@ from pcapviz.core import GraphManager
 from pcapviz.sources import ScapySource
 from scapy.all import *
 from scapy.layers.http import HTTP
+import os.path
+import csv
+import copy
+
+dnsCACHEfile = 'pcapgrok_dns_cache.xls'
 
 
-# make this global so we can use it for tests
+# this is a fugly hack to ensure we can pass the dns lookup cache around and eventually re-write it with any additions found
+
+# put here so we can import it for tests
 
 parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
 parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap')
@@ -32,12 +39,12 @@ args = parser.parse_args()
 
 llook = {'DNS':DNS,'UDP':UDP,'ARP':ARP,'NTP':NTP,'IP':IP,'TCP':TCP,'Raw':Raw,'HTTP':HTTP,'RIP':RIP,'RTP':RTP}
 
-def doLayer(layer, packets,fname,args,title):
+def doLayer(layer, packets,fname,args,title,dnsCACHE):
 	"""
 	run a single layer analysis
 	"""
 	args.nmax = int(args.nmax)
-	g = GraphManager(packets, layer=layer, args=args)
+	g = GraphManager(packets, layer, args, dnsCACHE)
 	g.title = "Layer %d using packets from %s" % (layer,title)
 	nn = len(g.graph.nodes())
 	if args.out:
@@ -47,7 +54,7 @@ def doLayer(layer, packets,fname,args,title):
 			for kind in llook.keys():
 				subset = [x for x in packets if x != None and x.haslayer(kind)]  
 				if len(subset) > 0:
-					sg = GraphManager(subset,layer=layer, args=args)
+					sg = GraphManager(subset,layer=layer, args=args, dnsCACHE=dnsCACHE)
 					nn = len(sg.graph.nodes())
 					if nn > 1:
 						ofn = '%s_%d_%s_%s' % (kind,nn,title.replace('+','_'),args.out)
@@ -67,7 +74,7 @@ def doLayer(layer, packets,fname,args,title):
 
 	if args.graphviz:
 		g.get_graphviz_format(args.graphviz)
-		
+	dnsCACHE = copy.copy(g.dnsCACHE)
 	if args.DEBUG:
 		macs = {}
 		for packet in packets:
@@ -78,12 +85,13 @@ def doLayer(layer, packets,fname,args,title):
 			if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
 				ip = packet[1].src
 				macs[packet[0].src][1] = ip
-				macs[packet[0].src][2] = g.iplookup(ip)
+				macs[packet[0].src][2] = dnsCACHE.get(ip,'')
 		print('# mac\tip\thostinfo\tpackets\n%s' % '\n'.join(['%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][2],macs[x][0]) for x in macs.keys()]))
+	print('##### graphmanager done Len dnsCACHE =',len(dnsCACHE))
+	return(dnsCACHE)
 
 
-
-def doPcap(pin,args,title):
+def doPcap(pin,args,title,dnsCACHE):
 	"""
 	filtering and control for analysis - amalgamated input or not 
 	runs all layers if no layer specified
@@ -104,27 +112,57 @@ def doPcap(pin,args,title):
 		print('### Read', len(pin), 'packets. After applying supplied filters,',len(packets),'are left. wl=',wl,'bl=',bl)			
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
 		for layer in [2,3,4]:
-			doLayer(layer, packets,args.out,args,title)
+			dnsCACHE = doLayer(layer, packets,args.out,args,title,dnsCACHE)
 	else:
 		layer = 3
 		if args.layer2:
 			layer = 2
 		elif args.layer4:
 			layer = 4
-		doLayer(layer,packets,args.out,args,title)
-	
+		dnsCACHE = doLayer(layer,packets,args.out,args,title,dnsCACHE)
+	return(dnsCACHE)
 
 
 if __name__ == '__main__':
 	if args.pcaps:
+		dnsCACHE = {}
+		# {'fqdname':'','whoname':'','city':'','country':'','mac':''}
+		if os.path.isfile(dnsCACHEfile):
+			din = csv.reader(open(dnsCACHEfile,'r'),delimiter='\t')
+			for i,row in enumerate(din):
+				if i == 0:
+					header = row
+				else:
+					k = row[0]
+					rest = {}
+					for i,tk in enumerate(header[1:]):
+						rest[tk] = row[i+1] 
+					dnsCACHE[k] = rest
+		else:
+			print('### No dnsCACHE file',dnsCACHEfile,'found. Will create a new one')
+			
 		if args.append: # old style amalgamated input
 			pin = ScapySource.load(args.pcaps)
 			title = '+'.join(args.pcaps)
 			if len(title) > 50:
 				title = title[:50] + '_etc'
-			doPcap(pin,args,title)
+			dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 		else:
 			for fname in args.pcaps:
 				pin = rdpcap(fname) 
 				title = fname
-				doPcap(pin,args,title)
+				dnsCACHE = doPcap(pin,args,title,dnsCACHE)
+		header = ['ip','fqdname','city','country','whoname','mac']	
+		with open(dnsCACHEfile,'w') as cached:
+			writer = csv.DictWriter(cached,delimiter='\t',fieldnames = header)
+			writer.writeheader()
+			for k in dnsCACHE.keys():
+				row = dnsCACHE[k]
+				row['ip'] = k
+				writer.writerow(row)
+			cached.close()
+		if args.DEBUG:
+			print('wrote',len(dnsCACHE),'rows to',dnsCACHEfile)
+	else:
+		print('## input file parameter -i or --pcaps is mandatory - stopping')
+
