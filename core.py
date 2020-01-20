@@ -88,7 +88,7 @@ class GraphManager(object):
 		sorted_degrees = OrderedDict(sorted(list(unsorted_degrees), key=lambda t: t[1], reverse=True))
 		for i in sorted_degrees:
 			if print_stdout:
-				nn = self.iplookup(i)
+				nn = self.dnsCACHE[i]['ip']
 				if (nn == i):
 					print(sorted_degrees[i], i)
 				else:
@@ -98,8 +98,8 @@ class GraphManager(object):
 
 	def _retrieve_node_info(self, node, packet):				
 		"""cache all (slow!) fqdn reverse dns lookups from ip"""
-		self.data[node] = {}
-		drec = {'fqdname':None,'whoname':None,'city':None,'country':None,'mac':None}
+		self.data[node] = {'packet':packet}
+		drec = {'ip':None,'fqdname':None,'whoname':None,'city':None,'country':None,'mac':None}
 		ns = node.split(':')
 		if len(ns) <= 2: # has a port - not a mac or ipv6 address
 			ip = ns[0]
@@ -112,6 +112,7 @@ class GraphManager(object):
 		ddict = self.dnsCACHE.get(ip,None)
 		if ddict == None: # never seen
 			ddict = copy.copy(drec)
+			ddict['ip'] = ip
 			if mac != None:
 				ddict['mac'] = mac
 			city = ''
@@ -119,12 +120,14 @@ class GraphManager(object):
 			if self.geo_ip and (':' not in ip):			
 				mmdbrec = self.geo_ip.get(ip)
 				if mmdbrec != None:
-					countryrec = mmdbrec.get('city',None)
-					cityrec = mmdbrec.get('country',None)
+					countryrec = mmdbrec.get('country',None)
+					cityrec = mmdbrec.get('city',None)
 					if countryrec: # some records have one but not the other....
 						country = countryrec['names'].get(self.args.geolang,None)
+						self.data[node]['country'] = country
 					if cityrec:
 						city =  cityrec['names'].get(self.args.geolang,None)
+						self.data[node]['city'] = city
 				else:
 					if self.args.DEBUG:
 						print("could not load GeoIP data for ip %s" % ip)
@@ -148,7 +151,7 @@ class GraphManager(object):
 			self.dnsCACHE[ip] = ddict
 			if self.args.DEBUG:
 				print('## looked up',ip,'and added',ddict)
-
+		
 
 
 	def _retrieve_edge_info(self, src, dst):
@@ -223,7 +226,8 @@ class GraphManager(object):
 				nodelabel.append(fqdname)
 			if city > '' or country > '':
 				nodelabel.append('\n')
-				nodelabel.append('%s, %s' % (city,country))
+					
+				nodelabel.append('%s %s' % (city,country))
 			if whoname and whoname > '':
 				nodelabel.append('\n')
 				nodelabel.append(whoname)

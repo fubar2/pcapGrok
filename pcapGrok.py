@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 
-from pcapviz.core import GraphManager
-from pcapviz.sources import ScapySource
+from core import GraphManager
+from sources import ScapySource
 from scapy.all import *
 from scapy.layers.http import HTTP
 import os.path
@@ -10,8 +10,6 @@ import copy
 
 dnsCACHEfile = 'pcapgrok_dns_cache.xls'
 
-
-# this is a fugly hack to ensure we can pass the dns lookup cache around and eventually re-write it with any additions found
 
 # put here so we can import it for tests
 
@@ -87,7 +85,6 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 				macs[packet[0].src][1] = ip
 				macs[packet[0].src][2] = dnsCACHE.get(ip,'')
 		print('# mac\tip\thostinfo\tpackets\n%s' % '\n'.join(['%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][2],macs[x][0]) for x in macs.keys()]))
-	print('##### graphmanager done Len dnsCACHE =',len(dnsCACHE))
 	return(dnsCACHE)
 
 
