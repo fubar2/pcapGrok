@@ -126,7 +126,7 @@ def doPcap(pin,args,title,dnsCACHE):
 			layer = 2
 		elif args.layer4:
 			layer = 4
-		dnsCACHE = doLayer(layer,packets,args.out,args,title,dnsCACHE)
+		dnsCACHE = doLayer(layer,packets,args.outpath,args,title,dnsCACHE)
 	return(dnsCACHE)
 
 
@@ -151,7 +151,6 @@ if __name__ == '__main__':
 					dnsCACHE[k] = rest
 		else:
 			print('### No dnsCACHE file',dnsCACHEfile,'found. Will create a new one')
-			
 		if args.append: # old style amalgamated input
 			pin = ScapySource.load(args.pcaps)
 			title = '+'.join(args.pcaps)
@@ -160,8 +159,9 @@ if __name__ == '__main__':
 			dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 		else:
 			for fname in args.pcaps:
-				pin = rdpcap(fname) 
-				title = fname
+				pin = rdpcap(fname)
+				title = os.path.basename(fname)
+				if args.DEBUG: print("pcap title is " + title)
 				dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 		header = ['ip','fqdname','city','country','whoname','mac']	
 		with open(dnsCACHEfile,'w') as cached:
