@@ -10,6 +10,7 @@ Advantages over PcapVis include:
 - default all layers if no single layer requested.
 - whois RDAP 'asn_description' data when geoIP and socket.getfqdn draw blanks.
 - tables of traffic including all available identifying data for each host
+- --outpath allows outputs to be sent to a specified directory - will be created if not found
 
 ## Purpose
 Understanding network traffic from IoT devices is easier with network communication graphs. Scapy has some inbuilt visualisations. 
@@ -34,12 +35,12 @@ Very informative when there is traffic to and from cloud providers, since they a
 ## Usage
 
 ```
-usage: pcapGrok.py [-h] [-i [PCAPS [PCAPS ...]]] [-o OUT] [-g GRAPHVIZ]
-                   [--layer2] [--layer3] [--layer4] [-d]
-                   [-w [WHITELIST [WHITELIST ...]]]
+usage: pcapGrok.py [-h] [-a] [-i [PCAPS [PCAPS ...]]] [-p PICTURES]
+                   [-o OUTPATH] [-g GRAPHVIZ] [--layer2] [--layer3] [--layer4]
+                   [-d] [-w [WHITELIST [WHITELIST ...]]]
                    [-b [BLACKLIST [BLACKLIST ...]]]
                    [-r [RESTRICT [RESTRICT ...]]] [-fi] [-fo] [-G GEOPATH]
-                   [-l GEOLANG] [-E LAYOUTENGINE] [-s SHAPE] [-n NMAX] [-a]
+                   [-l GEOLANG] [-E LAYOUTENGINE] [-s SHAPE] [-n NMAX]
 
 Network packet capture (standard .pcap file) topology and message mapper.
 Optional protocol whitelist or blacklist and mac restriction to simplify
@@ -47,12 +48,21 @@ graphs. Draws all 3 layers unless a single one is specified
 
 optional arguments:
   -h, --help            show this help message and exit
+  -a, --append          Append multiple input files before processing as
+                        PcapVis previously did. New default is to batch
+                        process each input pcap file separately.
   -i [PCAPS [PCAPS ...]], --pcaps [PCAPS [PCAPS ...]]
                         Mandatory space delimited list of capture files to be
                         analyzed - wildcards work too - e.g. -i Y*.pcap
-  -o OUT, --out OUT     Each topology will be drawn and saved using this
-                        filename stub. Use (e.g.) .pdf or .png extension to
-                        specify the image type. PDF is best for large graphs
+  -p PICTURES, --pictures PICTURES
+                        Image filename stub for all images - layers and
+                        protocols are prepended to make file names. Use (e.g.)
+                        .pdf or .png extension to specify the image type. PDF
+                        is best for large graphs
+  -o OUTPATH, --outpath OUTPATH
+                        All outputs will be written to the supplied path.
+                        Default (if none supplied) is current working
+                        directory
   -g GRAPHVIZ, --graphviz GRAPHVIZ
                         Graph will be exported for downstream applications to
                         the specified file (dot format)
@@ -83,9 +93,6 @@ optional arguments:
                         Graphviz node shape - circle, diamond, box etc.
   -n NMAX, --nmax NMAX  Automagically draw individual protocols if more than
                         --nmax nodes. 100 seems too many for any one graph.
-  -a, --append          Append multiple input files before processing as
-                        PcapVis previously did. New default is to batch
-                        process each input pcap file separately.
 
 ```
 

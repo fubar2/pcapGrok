@@ -7,15 +7,19 @@ from scapy.layers.http import HTTP
 import os.path
 import csv
 import copy
+import logging
+import pathlib
 
 dnsCACHEfile = 'pcapgrok_dns_cache.xls'
-
+logging.basicConfig(filename='pcapGrok.log',level=logging.DEBUG)
 
 # put here so we can import it for tests
 
 parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
+parser.add_argument('-a', '--append', action='store_true',default=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
 parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap')
-parser.add_argument('-o', '--out', help='Each topology will be drawn and saved using this filename stub. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
+parser.add_argument('-p', '--pictures', help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
+parser.add_argument('-o', '--outpath', required=False, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
 parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)')
 parser.add_argument('--layer2', action='store_true', help='Device (mac address) topology network graph')
 parser.add_argument('--layer3', action='store_true', help='IP layer message graph. Default')
@@ -31,7 +35,6 @@ parser.add_argument('-l', '--geolang', default='en', help='Language to use for g
 parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method - dot, sfdp etc.')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
-parser.add_argument('-a', '--append', action='store_true',default=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
 
 args = parser.parse_args()
 
@@ -45,25 +48,27 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 	g = GraphManager(packets, layer, args, dnsCACHE)
 	g.title = "Layer %d using packets from %s" % (layer,title)
 	nn = len(g.graph.nodes())
-	if args.out:
+	if args.pictures:
 		if nn > args.nmax:
-			if args.DEBUG:
-				print('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
+			logging.warning('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
 			for kind in llook.keys():
 				subset = [x for x in packets if x != None and x.haslayer(kind)]  
 				if len(subset) > 0:
 					sg = GraphManager(subset,layer=layer, args=args, dnsCACHE=dnsCACHE)
 					nn = len(sg.graph.nodes())
 					if nn > 1:
-						ofn = '%s_%d_%s_%s' % (kind,nn,title.replace('+','_'),args.out)
+						ofn = '%s_%d_%s_%s' % (kind,nn,title.replace('+','_'),args.pictures)
+						if args.outpath:
+							ofn = os.path.join(args.outpath,ofn)
 						sg.title = 'Layer %d using packets from %s' % (layer,title)
 						sg.draw(filename = ofn)
-						if args.DEBUG:
-							print('drew %s %d nodes' % (ofn,nn))
+						logging.debug('drew %s %d nodes' % (ofn,nn))
 					else:
-						if args.DEBUG:
-							print('found',nn,'nodes so not a very worthwhile graph')
-		g.draw(filename='%s_layer%d_%s' % (title.replace('+','_'),layer,args.out))
+						logging.debug('found %d nodes so not a very worthwhile graph' % nn)
+		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
+		if args.outpath:
+			ofn = os.path.join(args.outpath,ofn)
+		g.draw(filename=ofn)
 	if args.frequent_in:
 		g.get_in_degree()
 
@@ -82,9 +87,14 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 			macs[packet[0].dst][0] += 1
 			if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
 				ip = packet[1].src
+				d = dnsCACHE.get(ip,None)
+				if not d:
+					d = dnsCACHE.get(ip.split(':')[0],None)
+				if d:
+					macs[packet[0].src][2] = d['whoname']
 				macs[packet[0].src][1] = ip
-				macs[packet[0].src][2] = dnsCACHE.get(ip,'')
-		print('# mac\tip\thostinfo\tpackets\n%s' % '\n'.join(['%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][2],macs[x][0]) for x in macs.keys()]))
+		print('# mac\tip\thostinfo\tnpackets')
+		print(''.join(['%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][2],macs[x][0]) for x in macs.keys()]))
 	return(dnsCACHE)
 
 
@@ -109,7 +119,7 @@ def doPcap(pin,args,title,dnsCACHE):
 		print('### Read', len(pin), 'packets. After applying supplied filters,',len(packets),'are left. wl=',wl,'bl=',bl)			
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
 		for layer in [2,3,4]:
-			dnsCACHE = doLayer(layer, packets,args.out,args,title,dnsCACHE)
+			dnsCACHE = doLayer(layer, packets,args.pictures,args,title,dnsCACHE)
 	else:
 		layer = 3
 		if args.layer2:
@@ -122,6 +132,10 @@ def doPcap(pin,args,title,dnsCACHE):
 
 if __name__ == '__main__':
 	if args.pcaps:
+		if args.outpath:
+			if not (os.path.exists(args.outpath)):
+				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
+				logging.info('Made %s for output' % args.outpath)
 		dnsCACHE = {}
 		# {'fqdname':'','whoname':'','city':'','country':'','mac':''}
 		if os.path.isfile(dnsCACHEfile):
