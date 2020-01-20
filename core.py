@@ -112,7 +112,7 @@ class GraphManager(object):
 		ddict = self.dnsCACHE.get(ip,None)
 		if ddict == None: # never seen
 			ddict = copy.copy(drec)
-			ddict['ip'] = ip
+			ddict['ip'] = node
 			if mac != None:
 				ddict['mac'] = mac
 			city = ''
@@ -148,9 +148,9 @@ class GraphManager(object):
 				fullname = '%s\n%s' % (fqdname,whoname)
 			else:
 				ddict['fqdname'] = ''
-			self.dnsCACHE[ip] = ddict
+			self.dnsCACHE[node] = ddict
 			if self.args.DEBUG:
-				print('## looked up',ip,'and added',ddict)
+				print('## looked up',node,'and added',ddict)
 		
 
 
@@ -220,7 +220,7 @@ class GraphManager(object):
 			whoname = ddict['whoname']
 			if whoname != None and whoname != '(Private LAN address)':
 				node.attr['color'] = 'violet' # remote hosts
-			nodelabel = [ip,]
+			nodelabel = [node,]
 			if fqdname > '' and fqdname != ip:
 				nodelabel.append('\n')
 				nodelabel.append(fqdname)

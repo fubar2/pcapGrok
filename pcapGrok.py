@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 from argparse import ArgumentParser
 
 from core import GraphManager
@@ -57,7 +59,7 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 					sg = GraphManager(subset,layer=layer, args=args, dnsCACHE=dnsCACHE)
 					nn = len(sg.graph.nodes())
 					if nn > 1:
-						ofn = '%s_%d_%s_%s' % (kind,nn,title.replace('+','_'),args.pictures)
+						ofn = '%s_%d_layer%d_%s_%s' % (kind,nn,layer,title.replace('+','_'),args.pictures)
 						if args.outpath:
 							ofn = os.path.join(args.outpath,ofn)
 						sg.title = 'Layer %d using packets from %s' % (layer,title)
@@ -81,9 +83,9 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 	if args.DEBUG:
 		macs = {}
 		for packet in packets:
-			macs.setdefault(packet[0].src,[0,'',''])
+			macs.setdefault(packet[0].src,[0,'','',''])
 			macs[packet[0].src][0] += 1
-			macs.setdefault(packet[0].dst,[0,'',''])
+			macs.setdefault(packet[0].dst,[0,'','',''])
 			macs[packet[0].dst][0] += 1
 			if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
 				ip = packet[1].src
@@ -92,9 +94,10 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 					d = dnsCACHE.get(ip.split(':')[0],None)
 				if d:
 					macs[packet[0].src][2] = d['whoname']
+					macs[packet[0].src][3] = d['fqdname']
 				macs[packet[0].src][1] = ip
-		print('# mac\tip\thostinfo\tnpackets')
-		print(''.join(['%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][2],macs[x][0]) for x in macs.keys()]))
+		print('# mac\tip\tfqdn\thostinfo\tnpackets')
+		print(''.join(['%s\t%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][3],macs[x][2],macs[x][0]) for x in macs.keys()]))
 	return(dnsCACHE)
 
 
