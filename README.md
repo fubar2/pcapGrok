@@ -2,7 +2,9 @@
 
 ## Differences from PcapVis
 pcapGrok is a hack based on PcapVis https://github.com/mateuszk87/PcapViz 
-It offers 
+
+Advantages over PcapVis include:
+
 - additional command line controls 
 - default batch mode for multiple pcap files
 - default all layers if no single layer requested.
@@ -17,7 +19,7 @@ Adding annotation to the graph labels and colouring remote nodes violet helps im
 helps focus on the traffic of interest, effectively reducing noise from irrelevant chatter among other devices during the packet capture period. 
 
 ## Features
-- Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
+- Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows. Format is determined by the extension of the --OUT parameter - e.g. --OUT foo.pdf will draw pdfs.
 - Graph node labels show host FQDN, country and city if available from maxminddb and socket.getfqdn. Otherwise "asn_description" from whois data is shown.
 Very informative when there is traffic to and from cloud providers, since they are nearly always identified. Violet nodes are outside the LAN. 
 - Edges drawn in thickness proportional to traffic volume
@@ -26,17 +28,18 @@ Very informative when there is traffic to and from cloud providers, since they a
 - Automatic *separated graphs by protocol* where the number of nodes exceeds NMAX (default is 100). Set to a small number (e.g. 2) to force splitting. Big graph is always drawn but they get pretty dense.
 - Lists the most frequently contacted and frequently sending machines and identifying information
 - command line choice of Graphviz graph layout engine such as dot or sfdp.
-- optionally amalgamates all input pcap files into one before drawing graphs. Default is to draw graphs for each input pcap separately.
+- optionally amalgamates all input pcap files into one before drawing graphs. Default is to draw graphs for each of multiple input pcap files separately.
 
 
 ## Usage
 
 ```
-usage: main.py [-h] -i [PCAPS [PCAPS ...]] [-o OUT] [-g GRAPHVIZ] [--layer2]
-               [--layer3] [--layer4] [-d] [-w [WHITELIST [WHITELIST ...]]]
-               [-b [BLACKLIST [BLACKLIST ...]]] [-r [RESTRICT [RESTRICT ...]]]
-               [-fi] [-fo] [-G GEOPATH] [-l GEOLANG] [-E LAYOUTENGINE]
-               [-s SHAPE] [-n NMAX] [-a]
+usage: pcapGrok.py [-h] [-i [PCAPS [PCAPS ...]]] [-o OUT] [-g GRAPHVIZ]
+                   [--layer2] [--layer3] [--layer4] [-d]
+                   [-w [WHITELIST [WHITELIST ...]]]
+                   [-b [BLACKLIST [BLACKLIST ...]]]
+                   [-r [RESTRICT [RESTRICT ...]]] [-fi] [-fo] [-G GEOPATH]
+                   [-l GEOLANG] [-E LAYOUTENGINE] [-s SHAPE] [-n NMAX] [-a]
 
 Network packet capture (standard .pcap file) topology and message mapper.
 Optional protocol whitelist or blacklist and mac restriction to simplify
@@ -48,8 +51,8 @@ optional arguments:
                         Mandatory space delimited list of capture files to be
                         analyzed - wildcards work too - e.g. -i Y*.pcap
   -o OUT, --out OUT     Each topology will be drawn and saved using this
-                        filename stub. Use a .pdf or .png filename extension
-                        to specify image type
+                        filename stub. Use (e.g.) .pdf or .png extension to
+                        specify the image type. PDF is best for large graphs
   -g GRAPHVIZ, --graphviz GRAPHVIZ
                         Graph will be exported for downstream applications to
                         the specified file (dot format)
@@ -88,7 +91,7 @@ optional arguments:
 
 
 ## "Layers"
-The layers PcapVis offers are:
+The layers pcapGrok offers are:
 
  - device level traffic topology (--layer2), 
  - ip communication (--layer3) and 
@@ -114,11 +117,15 @@ is used as a label. This is handy where the device talks to cloud servers - at l
 applications the device is chatting to. If LAN devices are named in your local /etc/hosts file, these names will be shown on all
 relevant nodes.
 
-## Examples from running tests/core.py on the test.pcap file
+A cache file is written to speed up re-runs of the same set of packet files since FQDN and whois lookups incur network and other delay.
+
+## Examples from running tests/test.py on the test.pcap file
 
 **Drawing a communication graph (layer 2), segment**
+This can be emulated with a command line like:
+
 ```
-python main.py -i tests/test.pcap -o test2.png --layer2
+python pcapGrok.py -i tests/test.pcap -o test2.png --layer2
 ```
 
 ![layer 2 sample](tests/test2.png)
@@ -135,7 +142,7 @@ python main.py -i tests/test.pcap -o test2.png --layer2
 Return hosts with largest numbers of incoming packets:
 
 ```
-python3 main.py -i tests/test.pcap -fi --layer3
+python3 pcapGrok.py -i tests/test.pcap -fi --layer3
 4 172.16.11.12
 1 74.125.19.17
 1 216.34.181.45 slashdot.org
@@ -211,8 +218,7 @@ apt-get install graphviz libgraphviz-dev pkg-config
 ```
 
 ### Installation OSX
-
-Scapy does not work out-of-the-box on OSX. Follow the platform specific instruction from the [scapy website](http://scapy.readthedocs.io/en/latest/installation.html#platform-specific-instructions)
+pcapGrok has NOT been tested on OSX. For PcapVis, it was noted that Scapy does not work out-of-the-box on OSX. Follow the platform specific instruction from the [scapy website](http://scapy.readthedocs.io/en/latest/installation.html#platform-specific-instructions)
 
 ```
 brew install graphviz
@@ -224,7 +230,7 @@ brew install https://raw.githubusercontent.com/secdev/scapy/master/.travis/pylib
 
 Unit tests can be run from the tests directory:
 ```
-python3 core.py
+python3 test.py
 ```
 The sample images above are the test output graphs.
 
@@ -232,7 +238,11 @@ Note that there are at present 2 warnings about deprecated features in graphviz 
 Without access to the geoIP data, two of the tests will always fail.
 
 ## Acknowledgement
-Maxmind ask that this be included - even though we do not distribute the data here it is...
 
+Most code comes from https://github.com/mateuszk87/PcapViz with many thanks to the original author.
+
+Maxmind ask that this be included - even though we do not distribute the data here it is...
+```
 This product includes GeoLite2 data created by MaxMind, available from
 <a href="https://www.maxmind.com">https://www.maxmind.com</a>.
+```
