@@ -10,14 +10,16 @@ It offers
 - tables of traffic including all available identifying data for each host
 
 ## Purpose
-Understanding network traffic from IoT devices can be made easier using network graphs and scapy has some inbuilt visualisations. 
-Seeing the packets at different layers is a good first level clarification and this was the thing about PcapVis that was so clever.
-Mateusz insight made the images far more comprehensible to me because drawing the information flows separately for each of three layers makes much more immediate sense.
+Understanding network traffic from IoT devices is easier with network communication graphs. Scapy has some inbuilt visualisations. 
+Seeing the packets at different layers is a good first level clarification and PcapVis provided the basis for this application. Mateusz' insight 
+made the images far more comprehensible to me because drawing the information flows separately for each of three layers makes much more immediate sense.
+Adding annotation to the graph labels and colouring remote nodes violet helps improve the utility of images. Filtering graphs on protocol and on mac addresses
+helps focus on the traffic of interest, effectively reducing noise from irrelevant chatter among other devices during the packet capture period. 
 
 ## Features
 - Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
 - Graph node labels show host FQDN, country and city if available from maxminddb and socket.getfqdn. Otherwise "asn_description" from whois data is shown.
-Very informative when there is traffic to and from cloud providers, since they are nearly always identified.
+Very informative when there is traffic to and from cloud providers, since they are nearly always identified. Violet nodes are outside the LAN. 
 - Edges drawn in thickness proportional to traffic volume
 - Filtering by *mac address* allows focus on a single device at all layers. This removes noise and chatter from other devices obscuring the network graph of interest.
 - Filtering by *protocol* using either whitelist or blacklist - eg ARP, UDP, NTP, RTP...
@@ -100,16 +102,17 @@ as many other visualisation packages do.
 ## Filters
 
 The --whitelist and --blacklist protocol parameters are mutually exclusive - each does what it suggests where a simple to identify notion of "protocol" exists in scapy.
-Protocols like DNS, ARP, IP, Raw, NTP and so on can be filtered out (blacklist) or filtered in (whitelist).
+Protocols including DNS, UDP, ARP, NTP, IP, TCP, Raw, HTTP, RIP, RTP can be filtered out (blacklist) or filtered in (whitelist)at present. Send code to add more please.
 
-The --restrict [mac address] parameter filters only packets to or from the mac addresses provided. Typically this would be some specific device whose traffic is of interest.
+The --restrict [mac address] parameter restricts graphs to packets going to or coming from the mac addresses provided. Typically this would be some specific device whose traffic is of interest.
 Restricting the graphs to mac filtered packets has the visual effect of removing uninteresting traffic between other devices contemporaneous with the packet capture.
 
 ## Graph node labels
 City, country codes are provided where found in a geoIP lookup using maxminddb. Installation is described below.
 The sockets.getfqdn function is used to look up each ip address encountered. If no information is available, whois data
 is used as a label. This is handy where the device talks to cloud servers - at least you have some idea of who hosts whatever
-applications the device is chatting to.
+applications the device is chatting to. If LAN devices are named in your local /etc/hosts file, these names will be shown on all
+relevant nodes.
 
 ## Examples from running tests/core.py on the test.pcap file
 
