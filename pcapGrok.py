@@ -153,7 +153,7 @@ if __name__ == '__main__':
 			print('### No dnsCACHE file',dnsCACHEfile,'found. Will create a new one')
 		if args.append: # old style amalgamated input
 			pin = ScapySource.load(args.pcaps)
-			title = '+'.join(args.pcaps)
+			title = '+'.join([os.path.basename(x) for x in args.pcaps])
 			if len(title) > 50:
 				title = title[:50] + '_etc'
 			dnsCACHE = doPcap(pin,args,title,dnsCACHE)
