@@ -25,6 +25,8 @@ import maxminddb
 from ipwhois import IPWhois
 from ipwhois import IPDefinedError
 
+PRIVATE = '(Private LAN address)'
+
 class GraphManager(object):
 	""" Generates and processes the graph based on packets
 	"""
@@ -42,16 +44,14 @@ class GraphManager(object):
 		try:
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
 		except:
-			if self.args.DEBUG:
-				print("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
+			logging.warning("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
 		if self.args.restrict:
 			packetsr = [x for x in packets if ((x[0].src in self.args.restrict) or (x[0].dst in self.args.restrict))]
 			if len(packetsr) == 0:
-				print('### warning - no packets left after filtering on %s - nothing to plot' % self.args.restrict)
+				logging.warning('### warning - no packets left after filtering on %s - nothing to plot' % self.args.restrict)
 				return
 			else:
-				if self.args.DEBUG:
-					print('%d packets filtered with restrict = ' % (len(packets) - len(packetsr)),self.args.restrict)
+				logging.info('%d packets filtered leaving %d with restrict = %s' % (len(packets) - len(packetsr),len(packetssr),self.args.restrict))
 				packets = packetsr
 		if self.layer == 2:
 			edges = map(self._layer_2_edge, packets)
@@ -129,28 +129,25 @@ class GraphManager(object):
 						city =  cityrec['names'].get(self.args.geolang,None)
 						self.data[node]['city'] = city
 				else:
-					if self.args.DEBUG:
-						print("could not load GeoIP data for ip %s" % ip)
+					logging.error("could not load GeoIP data for ip %s" % ip)
 			ddict['city'] = city
 			ddict['country'] = country
 			if not (':' in ip):
 				fqdname = socket.getfqdn(ip)
-				if self.args.DEBUG:
-					print('##ip',ip,' = fqdname',fqdname)
+				logging.info('##ip',ip,' = fqdname',fqdname)
 				ddict['fqdname'] = fqdname
 				try:
 					who = IPWhois(ip)
 					qry = who.lookup_rdap(depth=1)
 					whoname = qry['asn_description']
 				except IPDefinedError:
-					whoname = '(Private LAN address)'
+					whoname = PRIVATE
 				ddict['whoname'] = whoname
 				fullname = '%s\n%s' % (fqdname,whoname)
 			else:
 				ddict['fqdname'] = ''
 			self.dnsCACHE[node] = ddict
-			if self.args.DEBUG:
-				print('## looked up',node,'and added',ddict)
+			logging.info('## looked up',node,'and added',ddict)
 		
 
 
@@ -218,7 +215,7 @@ class GraphManager(object):
 			fqdname = ddict['fqdname']
 			mac = ddict['mac']
 			whoname = ddict['whoname']
-			if whoname != None and whoname != '(Private LAN address)':
+			if whoname != None and whoname != PRIVATE:
 				node.attr['color'] = 'violet' # remote hosts
 			nodelabel = [node,]
 			if fqdname > '' and fqdname != ip:

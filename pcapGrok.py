@@ -13,7 +13,9 @@ import logging
 import pathlib
 
 dnsCACHEfile = 'pcapgrok_dns_cache.xls'
-logging.basicConfig(filename='pcapGrok.log',level=logging.DEBUG)
+logFileName = 'pcapgrok.log'
+OUTHOSTFILE = 'pcapgrok_hostinfo.xls'
+logging.basicConfig(filename=logFileName,level=logging.INFO)
 
 # put here so we can import it for tests
 
@@ -26,7 +28,6 @@ parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstr
 parser.add_argument('--layer2', action='store_true', help='Device (mac address) topology network graph')
 parser.add_argument('--layer3', action='store_true', help='IP layer message graph. Default')
 parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph')
-parser.add_argument('-d','--DEBUG', action='store_true', help='Show debug messages and other (sometimes) very useful data')
 parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
 parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
@@ -64,9 +65,9 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 							ofn = os.path.join(args.outpath,ofn)
 						sg.title = 'Layer %d using packets from %s' % (layer,title)
 						sg.draw(filename = ofn)
-						logging.debug('drew %s %d nodes' % (ofn,nn))
+						logging.info('drew %s %d nodes' % (ofn,nn))
 					else:
-						logging.debug('found %d nodes so not a very worthwhile graph' % nn)
+						logging.info('found %d nodes so not a very worthwhile graph' % nn)
 		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
@@ -80,24 +81,27 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 	if args.graphviz:
 		g.get_graphviz_format(args.graphviz)
 	dnsCACHE = copy.copy(g.dnsCACHE)
-	if args.DEBUG:
-		macs = {}
-		for packet in packets:
-			macs.setdefault(packet[0].src,[0,'','',''])
-			macs[packet[0].src][0] += 1
-			macs.setdefault(packet[0].dst,[0,'','',''])
-			macs[packet[0].dst][0] += 1
-			if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
-				ip = packet[1].src
-				d = dnsCACHE.get(ip,None)
-				if not d:
-					d = dnsCACHE.get(ip.split(':')[0],None)
-				if d:
-					macs[packet[0].src][2] = d['whoname']
-					macs[packet[0].src][3] = d['fqdname']
-				macs[packet[0].src][1] = ip
-		print('# mac\tip\tfqdn\thostinfo\tnpackets')
-		print(''.join(['%s\t%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][3],macs[x][2],macs[x][0]) for x in macs.keys()]))
+	macs = {}
+	fname = OUTHOSTFILE
+	f = open(fname,'w')
+	for packet in packets:
+		macs.setdefault(packet[0].src,[0,'','',''])
+		macs[packet[0].src][0] += 1
+		macs.setdefault(packet[0].dst,[0,'','',''])
+		macs[packet[0].dst][0] += 1
+		if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
+			ip = packet[1].src
+			d = dnsCACHE.get(ip,None)
+			if not d:
+				d = dnsCACHE.get(ip.split(':')[0],None)
+			if d:
+				macs[packet[0].src][2] = d['whoname']
+				macs[packet[0].src][3] = d['fqdname']
+			macs[packet[0].src][1] = ip
+	f.write('# mac\tip\tfqdn\thostinfo\tnpackets\n')
+	f.write(''.join(['%s\t%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][3],macs[x][2],macs[x][0]) for x in macs.keys()]))
+	f.write('\n')
+	f.close()
 	return(dnsCACHE)
 
 
@@ -112,14 +116,14 @@ def doPcap(pin,args,title,dnsCACHE):
 		print('### Parameter error: Specify --blacklist or specify --whitelist but not both together please.')
 		sys.exit(1)
 	packets = pin
-	if args.whitelist: # packets are returned from ScapySource.load as a list so cannot use pcap.filter(lambda...)
+	if args.whitelist: 
 		wl = [llook[x] for x in args.whitelist]
 		packets = [x for x in pin if sum([x.haslayer(y) for y in wl]) > 0 and x != None]  
 	elif args.blacklist:
 		bl = [llook[x] for x in args.blacklist]
 		packets = [x for x in pin if sum([x.haslayer(y) for y in bl]) == 0 and x != None]  
-	if args.DEBUG and (args.blacklist or args.whitelist):
-		print('### Read', len(pin), 'packets. After applying supplied filters,',len(packets),'are left. wl=',wl,'bl=',bl)			
+	if (args.blacklist or args.whitelist):
+		logging.info('### Read', len(pin), 'packets. After applying supplied filters,',len(packets),'are left. wl=',wl,'bl=',bl)			
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
 		for layer in [2,3,4]:
 			dnsCACHE = doLayer(layer, packets,args.pictures,args,title,dnsCACHE)
@@ -164,7 +168,7 @@ if __name__ == '__main__':
 			for fname in args.pcaps:
 				pin = rdpcap(fname)
 				title = os.path.basename(fname)
-				if args.DEBUG: print("pcap title is " + title)
+				logging.info("Processing %s. Title is %s" % (fname,title))
 				dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 		header = ['ip','fqdname','city','country','whoname','mac']	
 		with open(dnsCACHEfile,'w') as cached:
@@ -175,8 +179,7 @@ if __name__ == '__main__':
 				row['ip'] = k
 				writer.writerow(row)
 			cached.close()
-		if args.DEBUG:
-			print('wrote',len(dnsCACHE),'rows to',dnsCACHEfile)
+		logging.info('wrote %d rows to %s' % (len(dnsCACHE),dnsCACHEfile))
 	else:
 		print('## input file parameter -i or --pcaps is mandatory - stopping')
 
