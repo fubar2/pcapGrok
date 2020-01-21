@@ -51,7 +51,7 @@ class GraphManager(object):
 				logging.warning('### warning - no packets left after filtering on %s - nothing to plot' % self.args.restrict)
 				return
 			else:
-				logging.info('%d packets filtered leaving %d with restrict = %s' % (len(packets) - len(packetsr),len(packetssr),self.args.restrict))
+				logging.info('%d packets filtered leaving %d with restrict = %s' % (len(packets) - len(packetsr),len(packetsr),self.args.restrict))
 				packets = packetsr
 		if self.layer == 2:
 			edges = map(self._layer_2_edge, packets)
