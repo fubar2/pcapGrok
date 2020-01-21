@@ -38,6 +38,7 @@ parser.add_argument('-l', '--geolang', default='en', help='Language to use for g
 parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method - dot, sfdp etc.')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
+parser.add_argument('-hf', '--hostsfile', required=False, help='Hosts file, contains space-delimited ipaddress,hostname or macaddress hostname pairs, which are used to annotate the graphs')
 
 args = parser.parse_args()
 
@@ -144,14 +145,35 @@ if __name__ == '__main__':
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
 				logging.info('Made %s for output' % args.outpath)
 		dnsCACHE = {}
-		# {'fqdname':'','whoname':'','city':'','country':'','mac':''}
-		if os.path.isfile(dnsCACHEfile):
-			din = csv.reader(open(dnsCACHEfile,'r'),delimiter='\t')
+		# {'fqdname':'','whoname':'','city':'','country':'','mac':''} 
+		# read in optional hostsfile, which is formatted in same way as dnsCACHE file
+		# read in optional hostsfile, which is formatted in same way as dnsCACHE file
+		if args.hostsfile and os.path.isfile(args.hostsfile):
+			din = csv.reader(open(args.hostsfile,'r'),delimiter='\t')
+			print("reading hostsfile")
 			for i,row in enumerate(din):
 				if i == 0:
 					header = row
 				else:
 					k = row[0]
+					rest = {}
+					for i,tk in enumerate(header[1:]):
+						rest[tk] = row[i+1] 
+					dnsCACHE[k] = rest
+		elif args.hostsfile and not os.path.isfile(args.hostsfile):
+			print("Invalid hostsfile supplied, skipping")
+		else:
+			print("### hostsfile not supplied")
+		if os.path.isfile(dnsCACHEfile):
+			din = csv.reader(open(dnsCACHEfile,'r'),delimiter='\t')
+			print("reading dnsCACHEfile")
+			for i,row in enumerate(din):
+				if i == 0:
+					header = row
+				else:
+					k = row[0]
+					# data loaded from hostsfile has priority over data from cachefile
+					if dnsCACHE.get(k,None) != None: continue
 					rest = {}
 					for i,tk in enumerate(header[1:]):
 						rest[tk] = row[i+1] 
