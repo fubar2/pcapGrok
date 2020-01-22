@@ -137,6 +137,50 @@ def doPcap(pin,args,title,dnsCACHE):
 		dnsCACHE = doLayer(layer,packets,args.outpath,args,title,dnsCACHE)
 	return(dnsCACHE)
 
+def readHostsFile(hostfile,dnsCACHE):
+	din = csv.reader(open(args.hostsfile,'r'),delimiter='\t')
+	logging.info("reading hostsfile %s" % args.hostsfile)
+	for i,row in enumerate(din):
+		if i == 0:
+			header = row
+		elif len(row) == 0: # empty row
+			continue
+		elif row[0].lstrip() == '#': # comment
+			continue
+		else:
+			k = row[0]
+			rest = {}
+			for i,tk in enumerate(header[1:]):
+				if row[i+1]:
+					rest[tk] = row[i+1]
+				else:
+					rest[tk] = ""
+			dnsCACHE[k] = rest
+			logging.info('### wrote new dnsCACHE entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
+	return(dnsCACHE)
+	
+def readDnsCache(dnsCACHEfile,dnsCACHE):
+	din = csv.reader(open(dnsCACHEfile,'r'),delimiter='\t')
+	logging.info("reading dnsCACHEfile %s" % dnsCACHEfile)
+	for i,row in enumerate(din):
+		if i == 0:
+			header = row
+		elif len(row) == 0:
+			continue
+		elif row[0].lstrip() == '#':
+			continue
+		else:
+			k = row[0]
+			# data loaded from hostsfile has priority over data from cachefile
+			if dnsCACHE.get(k,None): 
+				continue
+			rest = {}
+			for i,tk in enumerate(header[1:]):
+				rest[tk] = row[i+1] 
+			dnsCACHE[k] = rest
+			logging.info('### wrote new dnsCACHE entry k=%s contents=%s from existing cache' % (k,rest))
+	return dnsCACHE
+
 
 if __name__ == '__main__':
 	if args.pcaps:
@@ -147,36 +191,15 @@ if __name__ == '__main__':
 		dnsCACHE = {}
 		# {'fqdname':'','whoname':'','city':'','country':'','mac':''} 
 		# read in optional hostsfile, which is formatted in same way as dnsCACHE file
-		if args.hostsfile and os.path.isfile(args.hostsfile):
-			din = csv.reader(open(args.hostsfile,'r'),delimiter='\t')
-			print("reading hostsfile")
-			for i,row in enumerate(din):
-				if i == 0:
-					header = row
-				else:
-					k = row[0]
-					rest = {}
-					for i,tk in enumerate(header[1:]):
-						rest[tk] = row[i+1] 
-					dnsCACHE[k] = rest
-		elif args.hostsfile and not os.path.isfile(args.hostsfile):
-			print("Invalid hostsfile supplied, skipping")
+		if args.hostsfile:
+			if os.path.isfile(args.hostsfile):
+				dnsCACHE = readHostsFile(args.hostsfile,dnsCACHE)
+			else:
+				logging.info("## Invalid hostsfile %s supplied, skipping" % args.hostsfile)
 		else:
-			print("### hostsfile not supplied")
+			logging.info("### hostsfile not supplied")
 		if os.path.isfile(dnsCACHEfile):
-			din = csv.reader(open(dnsCACHEfile,'r'),delimiter='\t')
-			print("reading dnsCACHEfile")
-			for i,row in enumerate(din):
-				if i == 0:
-					header = row
-				else:
-					k = row[0]
-					# data loaded from hostsfile has priority over data from cachefile
-					if dnsCACHE.get(k,None) != None: continue
-					rest = {}
-					for i,tk in enumerate(header[1:]):
-						rest[tk] = row[i+1] 
-					dnsCACHE[k] = rest
+			dnsCACHE = readDnsCache(dnsCACHEfile,dnsCACHE)
 		else:
 			print('### No dnsCACHE file',dnsCACHEfile,'found. Will create a new one')
 		if args.append: # old style amalgamated input

@@ -104,17 +104,16 @@ class GraphManager(object):
 		if len(ns) <= 2: # has a port - not a mac or ipv6 address
 			ip = ns[0]
 		else:
-			ip = node
-		if packet[0].src:
-			mac = packet[0].src
-		else:
-			mac = None
-		ddict = self.dnsCACHE.get(ip,None)
+			ip = node # might be ipv6 or mac - use as key
+		ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
 		if ddict == None: # never seen
 			ddict = copy.copy(drec)
 			ddict['ip'] = node
-			if mac != None:
-				ddict['mac'] = mac
+			if len(node.split(':')) == 5: # mac?
+				ddict['mac'] = node
+			else: # broken at present FIXME!!!
+				ddict['mac'] = packet[0].src
+			#if len(node.split('::')) == 1: # not ipv6
 			city = ''
 			country = ''
 			if self.geo_ip and (':' not in ip):			
@@ -134,7 +133,7 @@ class GraphManager(object):
 			ddict['country'] = country
 			if not (':' in ip):
 				fqdname = socket.getfqdn(ip)
-				logging.info('##ip',ip,' = fqdname',fqdname)
+				logging.info('##ip %s = %s' % (ip,fqdname))
 				ddict['fqdname'] = fqdname
 				try:
 					who = IPWhois(ip)
@@ -147,7 +146,7 @@ class GraphManager(object):
 			else:
 				ddict['fqdname'] = ''
 			self.dnsCACHE[node] = ddict
-			logging.info('## looked up',node,'and added',ddict)
+			logging.info('## looked up %s and added %s' % (node,ddict))
 		
 
 
@@ -210,11 +209,11 @@ class GraphManager(object):
 			node.attr['width'] = '0.5'
 			node.attr['color'] = 'powderblue' # assume all are local hosts
 			node.attr['style'] = 'filled,rounded'
-			country = ddict['country']
-			city = ddict['city']
-			fqdname = ddict['fqdname']
-			mac = ddict['mac']
-			whoname = ddict['whoname']
+			country = ddict.get('country','')
+			city = ddict.get('city','')
+			fqdname = ddict.get('fqdname','')
+			mac = ddict.get('mac','')
+			whoname = ddict.get('whoname','')
 			if whoname != None and whoname != PRIVATE:
 				node.attr['color'] = 'violet' # remote hosts
 			nodelabel = [node,]
