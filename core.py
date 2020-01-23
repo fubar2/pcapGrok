@@ -25,16 +25,15 @@ import maxminddb
 from ipwhois import IPWhois
 from ipwhois import IPDefinedError
 
-global ip_macdict
-global dnsCACHE
-
+MULTIMAC = "01:00:5e"
+UNIMAC = "00:00:5e"
 PRIVATE = '(Private LAN address)'
 
 class GraphManager(object):
 	""" Generates and processes the graph based on packets
 	"""
 
-	def __init__(self, packets, layer, args, dnsCACHE,ip_macdict):
+	def __init__(self, packets, layer, args, dnsCACHE,ip_macdict,mac_ipdict):
 		assert layer in [2,3,4],'###GraphManager __init__ got layer = %s. Must be 2,3 or 4' % str(layer)
 		assert len(packets) > 0, '###GraphManager __init__ got empty packets list - nothing useful can be done'
 		self.graph = DiGraph()
@@ -43,6 +42,7 @@ class GraphManager(object):
 		self.args = args
 		self.data = {}
 		self.ip_macdict = ip_macdict
+		self.mac_ipdict = mac_ipdict
 		self.dnsCACHE = dnsCACHE
 		self.title = 'Title goes here'
 		try:
@@ -114,41 +114,50 @@ class GraphManager(object):
 		ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
 		if ddict == None: # never seen - ignore ports because annotation is always the same
 			ddict = copy.copy(drec)
-			ddict['ip'] = ip
+			ddict['ip'] = ip	
+			city = ''
+			country = ''
 			mymac = self.ip_macdict.get(ip,None)
 			if mymac:
 				ddict['mac'] = mymac
-			if not (':' in ip):
-				fqdname = socket.getfqdn(ip)
-				logging.info('##ip %s = %s' % (ip,fqdname))
-				ddict['fqdname'] = fqdname
-				try:
-					who = IPWhois(ip)
-					qry = who.lookup_rdap(depth=1)
-					whoname = qry['asn_description']
-				except IPDefinedError:
-					whoname = PRIVATE
-				ddict['whoname'] = whoname
-				fullname = '%s\n%s' % (fqdname,whoname)
+			if ip.startswith('240.0'): # is igmp
+				ddict['fqdname'] = 'Multicast'
+				ddict['whoname'] = 'IGMP'
+			if ip.startswith(MULTIMAC):
+				ddict['fqdname'] = 'Multicast'
+			elif ip.startswith(UNIMAC):
+				ddict['fqdname'] = 'Unicast'
 			else:
-				ddict['fqdname'] = ''
-				if len(ns) == 6 and ddict['mac'] == '':
-					ddict['mac'] = ip
-			city = ''
-			country = ''
-			if self.geo_ip and ddict['whoname'] != PRIVATE and (':' not in ip):			
-				mmdbrec = self.geo_ip.get(ip)
-				if mmdbrec != None:
-					countryrec = mmdbrec.get('country',None)
-					cityrec = mmdbrec.get('city',None)
-					if countryrec: # some records have one but not the other....
-						country = countryrec['names'].get(self.args.geolang,None)
-						self.data[node]['country'] = country
-					if cityrec:
-						city =  cityrec['names'].get(self.args.geolang,None)
-						self.data[node]['city'] = city
+				if ip > '' and not (':' in ip):
+					fqdname = socket.getfqdn(ip)
+					ddict['fqdname'] = fqdname
+					try:
+						who = IPWhois(ip)
+						qry = who.lookup_rdap(depth=1)
+						whoname = qry['asn_description']
+					except IPDefinedError:
+						whoname = PRIVATE
+					ddict['whoname'] = whoname
+					fullname = '%s\n%s' % (fqdname,whoname)
 				else:
-					logging.error("could not load GeoIP data for ip %s" % ip)
+					ddict['fqdname'] = ''
+					if len(ns) == 6 and ddict['mac'] == '':
+						ddict['mac'] = ip
+				city = ''
+				country = ''
+				if ip > '' and self.geo_ip and ddict['whoname'] != PRIVATE and (':' not in ip):			
+					mmdbrec = self.geo_ip.get(ip)
+					if mmdbrec != None:
+						countryrec = mmdbrec.get('country',None)
+						cityrec = mmdbrec.get('city',None)
+						if countryrec: # some records have one but not the other....
+							country = countryrec['names'].get(self.args.geolang,None)
+							self.data[node]['country'] = country
+						if cityrec:
+							city =  cityrec['names'].get(self.args.geolang,None)
+							self.data[node]['city'] = city
+					else:
+						logging.error("could not load GeoIP data for ip %s" % ip)
 			ddict['city'] = city
 			ddict['country'] = country
 			self.dnsCACHE[node] = ddict
