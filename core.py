@@ -25,13 +25,16 @@ import maxminddb
 from ipwhois import IPWhois
 from ipwhois import IPDefinedError
 
+global ip_macdict
+global dnsCACHE
+
 PRIVATE = '(Private LAN address)'
 
 class GraphManager(object):
 	""" Generates and processes the graph based on packets
 	"""
 
-	def __init__(self, packets, layer, args, dnsCACHE):
+	def __init__(self, packets, layer, args, dnsCACHE,ip_macdict):
 		assert layer in [2,3,4],'###GraphManager __init__ got layer = %s. Must be 2,3 or 4' % str(layer)
 		assert len(packets) > 0, '###GraphManager __init__ got empty packets list - nothing useful can be done'
 		self.graph = DiGraph()
@@ -39,6 +42,7 @@ class GraphManager(object):
 		self.geo_ip = None
 		self.args = args
 		self.data = {}
+		self.ip_macdict = ip_macdict
 		self.dnsCACHE = dnsCACHE
 		self.title = 'Title goes here'
 		try:
@@ -53,6 +57,7 @@ class GraphManager(object):
 			else:
 				logging.info('%d packets filtered leaving %d with restrict = %s' % (len(packets) - len(packetsr),len(packetsr),self.args.restrict))
 				packets = packetsr
+		#self.checkmacs(packets)
 		if self.layer == 2:
 			edges = map(self._layer_2_edge, packets)
 		elif self.layer == 3:
@@ -74,6 +79,7 @@ class GraphManager(object):
 
 		for src, dst in self.graph.edges():
 			self._retrieve_edge_info(src, dst)
+
 
 
 	def get_in_degree(self, print_stdout=True):
@@ -99,38 +105,19 @@ class GraphManager(object):
 	def _retrieve_node_info(self, node, packet):				
 		"""cache all (slow!) fqdn reverse dns lookups from ip"""
 		self.data[node] = {'packet':packet}
-		drec = {'ip':None,'fqdname':None,'whoname':None,'city':None,'country':None,'mac':None}
+		drec = {'ip':'','fqdname':'','whoname':'','city':'','country':'','mac':''}
 		ns = node.split(':')
 		if len(ns) <= 2: # has a port - not a mac or ipv6 address
 			ip = ns[0]
 		else:
 			ip = node # might be ipv6 or mac - use as key
 		ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
-		if ddict == None: # never seen
+		if ddict == None: # never seen - ignore ports because annotation is always the same
 			ddict = copy.copy(drec)
-			ddict['ip'] = node
-			if len(node.split(':')) == 5: # mac?
-				ddict['mac'] = node
-			else: # broken at present FIXME!!!
-				ddict['mac'] = packet[0].src
-			#if len(node.split('::')) == 1: # not ipv6
-			city = ''
-			country = ''
-			if self.geo_ip and (':' not in ip):			
-				mmdbrec = self.geo_ip.get(ip)
-				if mmdbrec != None:
-					countryrec = mmdbrec.get('country',None)
-					cityrec = mmdbrec.get('city',None)
-					if countryrec: # some records have one but not the other....
-						country = countryrec['names'].get(self.args.geolang,None)
-						self.data[node]['country'] = country
-					if cityrec:
-						city =  cityrec['names'].get(self.args.geolang,None)
-						self.data[node]['city'] = city
-				else:
-					logging.error("could not load GeoIP data for ip %s" % ip)
-			ddict['city'] = city
-			ddict['country'] = country
+			ddict['ip'] = ip
+			mymac = self.ip_macdict.get(ip,None)
+			if mymac:
+				ddict['mac'] = mymac
 			if not (':' in ip):
 				fqdname = socket.getfqdn(ip)
 				logging.info('##ip %s = %s' % (ip,fqdname))
@@ -145,6 +132,25 @@ class GraphManager(object):
 				fullname = '%s\n%s' % (fqdname,whoname)
 			else:
 				ddict['fqdname'] = ''
+				if len(ns) == 6 and ddict['mac'] == '':
+					ddict['mac'] = ip
+			city = ''
+			country = ''
+			if self.geo_ip and ddict['whoname'] != PRIVATE and (':' not in ip):			
+				mmdbrec = self.geo_ip.get(ip)
+				if mmdbrec != None:
+					countryrec = mmdbrec.get('country',None)
+					cityrec = mmdbrec.get('city',None)
+					if countryrec: # some records have one but not the other....
+						country = countryrec['names'].get(self.args.geolang,None)
+						self.data[node]['country'] = country
+					if cityrec:
+						city =  cityrec['names'].get(self.args.geolang,None)
+						self.data[node]['city'] = city
+				else:
+					logging.error("could not load GeoIP data for ip %s" % ip)
+			ddict['city'] = city
+			ddict['country'] = country
 			self.dnsCACHE[node] = ddict
 			logging.info('## looked up %s and added %s' % (node,ddict))
 		
@@ -209,11 +215,11 @@ class GraphManager(object):
 			node.attr['width'] = '0.5'
 			node.attr['color'] = 'powderblue' # assume all are local hosts
 			node.attr['style'] = 'filled,rounded'
-			country = ddict.get('country','')
-			city = ddict.get('city','')
-			fqdname = ddict.get('fqdname','')
-			mac = ddict.get('mac','')
-			whoname = ddict.get('whoname','')
+			country = ddict['country']
+			city = ddict['city']
+			fqdname = ddict['fqdname']
+			mac = ddict['mac']
+			whoname = ddict['whoname']
 			if whoname != None and whoname != PRIVATE:
 				node.attr['color'] = 'violet' # remote hosts
 			nodelabel = [node,]

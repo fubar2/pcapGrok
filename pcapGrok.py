@@ -15,7 +15,12 @@ import pathlib
 dnsCACHEfile = 'pcapgrok_dns_cache.xls'
 logFileName = 'pcapgrok.log'
 OUTHOSTFILE = 'pcapgrok_hostinfo.xls'
+IPBROADCAST = '0.0.0.0'
+MACBROADCAST = 'ff:ff:ff:ff:ff:ff'
+
 logging.basicConfig(filename=logFileName,level=logging.INFO)
+
+ip_macdict = {}
 
 # put here so we can import it for tests
 
@@ -23,7 +28,7 @@ parser = ArgumentParser(description='Network packet capture (standard .pcap file
 parser.add_argument('-a', '--append', action='store_true',default=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
 parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap')
 parser.add_argument('-p', '--pictures', help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
-parser.add_argument('-o', '--outpath', required=False, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
+parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
 parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)')
 parser.add_argument('--layer2', action='store_true', help='Device (mac address) topology network graph')
 parser.add_argument('--layer3', action='store_true', help='IP layer message graph. Default')
@@ -44,12 +49,14 @@ args = parser.parse_args()
 
 llook = {'DNS':DNS,'UDP':UDP,'ARP':ARP,'NTP':NTP,'IP':IP,'TCP':TCP,'Raw':Raw,'HTTP':HTTP,'RIP':RIP,'RTP':RTP}
 
-def doLayer(layer, packets,fname,args,title,dnsCACHE):
+
+		
+def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict):
 	"""
 	run a single layer analysis
 	"""
 	args.nmax = int(args.nmax)
-	g = GraphManager(packets, layer, args, dnsCACHE)
+	g = GraphManager(packets, layer, args, dnsCACHE, ip_macdict)
 	g.title = "Layer %d using packets from %s" % (layer,title)
 	nn = len(g.graph.nodes())
 	if args.pictures:
@@ -58,7 +65,7 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 			for kind in llook.keys():
 				subset = [x for x in packets if x != None and x.haslayer(kind)]  
 				if len(subset) > 0:
-					sg = GraphManager(subset,layer=layer, args=args, dnsCACHE=dnsCACHE)
+					sg = GraphManager(subset,layer, args, dnsCACHE, ip_macdict)
 					nn = len(sg.graph.nodes())
 					if nn > 1:
 						ofn = '%s_%d_layer%d_%s_%s' % (kind,nn,layer,title.replace('+','_'),args.pictures)
@@ -98,12 +105,22 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE):
 			if d:
 				macs[packet[0].src][2] = d['whoname']
 				macs[packet[0].src][3] = d['fqdname']
-			macs[packet[0].src][1] = ip
+			macs[packet[0].src][1] = IPBROADCAST
 	f.write('# mac\tip\tfqdn\thostinfo\tnpackets\n')
 	f.write(''.join(['%s\t%s\t%s\t%s\t%d\n' % (x,macs[x][1],macs[x][3],macs[x][2],macs[x][0]) for x in macs.keys()]))
 	f.write('\n')
 	f.close()
 	return(dnsCACHE)
+
+def checkmacs(packets):
+	"""best to determine mac/ip associations for local hosts before filtering on layer - layer4 changes the packet....
+	"""
+	for packet in packets:
+		macs = packet[0].src.lower()
+		if packet.haslayer(IP):
+			ips = packet[1].src.lower()
+			ip_macdict[ips] = macs
+	return(ip_macdict)
 
 
 def doPcap(pin,args,title,dnsCACHE):
@@ -124,37 +141,45 @@ def doPcap(pin,args,title,dnsCACHE):
 		bl = [llook[x] for x in args.blacklist]
 		packets = [x for x in pin if sum([x.haslayer(y) for y in bl]) == 0 and x != None]  
 	if (args.blacklist or args.whitelist):
-		logging.info('### Read', len(pin), 'packets. After applying supplied filters,',len(packets),'are left. wl=',wl,'bl=',bl)			
+		logging.info('### Read', len(pin), 'packets. After applying supplied filters,',len(packets),'are left. wl=',wl,'bl=',bl)
+	ip_macdict = checkmacs(packets)		
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
 		for layer in [2,3,4]:
-			dnsCACHE = doLayer(layer, packets,args.pictures,args,title,dnsCACHE)
+			dnsCACHE = doLayer(layer, packets,args.pictures,args,title,dnsCACHE,ip_macdict)
 	else:
 		layer = 3
 		if args.layer2:
 			layer = 2
 		elif args.layer4:
 			layer = 4
-		dnsCACHE = doLayer(layer,packets,args.outpath,args,title,dnsCACHE)
+		dnsCACHE = doLayer(layer,packets,args.outpath,args,title,dnsCACHE,ip_macdict)
 	return(dnsCACHE)
 
 def readHostsFile(hostfile,dnsCACHE):
 	din = csv.reader(open(args.hostsfile,'r'),delimiter='\t')
 	logging.info("reading hostsfile %s" % args.hostsfile)
+	header = None
 	for i,row in enumerate(din):
-		if i == 0:
+		if len(row) == 0:
+			continue
+		elif row[0].lstrip().startswith('#'):
+			continue
+		elif header == None:
 			header = row
-		elif len(row) == 0: # empty row
-			continue
-		elif row[0].lstrip() == '#': # comment
-			continue
+			s = '## hostsfile %s header = %s' % (args.hostsfile,header)
+			logging.info(s)
 		else:
-			k = row[0]
+			k = row[0].lower()
 			rest = {}
-			for i,tk in enumerate(header[1:]):
-				if row[i+1]:
-					rest[tk] = row[i+1]
+			for i,tk in enumerate(header):
+				if (len(row) > (i)):
+					rest[tk] = row[i]
 				else:
-					rest[tk] = ""
+					rest[tk] = ''
+					print('$$$ bad row %d in hostsfile = %s' % (i,row)) 
+			if len(k.split(':')) == 6: # mac?
+				if rest['mac'] == '':
+					rest['mac'] = k
 			dnsCACHE[k] = rest
 			logging.info('### wrote new dnsCACHE entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
 	return(dnsCACHE)
@@ -162,34 +187,58 @@ def readHostsFile(hostfile,dnsCACHE):
 def readDnsCache(dnsCACHEfile,dnsCACHE):
 	din = csv.reader(open(dnsCACHEfile,'r'),delimiter='\t')
 	logging.info("reading dnsCACHEfile %s" % dnsCACHEfile)
+	header = None
 	for i,row in enumerate(din):
-		if i == 0:
+		if len(row) == 0:
+			continue
+		elif row[0].lstrip().startswith('#'):
+			continue
+		elif header == None:
 			header = row
-		elif len(row) == 0:
-			continue
-		elif row[0].lstrip() == '#':
-			continue
+			s = '## dnscache %s header = %s' % (dnsCACHEfile,header)
+			logging.info(s)
 		else:
-			k = row[0]
+			k = row[0].lower()
 			# data loaded from hostsfile has priority over data from cachefile
 			if dnsCACHE.get(k,None): 
 				continue
 			rest = {}
-			for i,tk in enumerate(header[1:]):
-				rest[tk] = row[i+1] 
+			for i,tk in enumerate(header):
+				rest[tk] = row[i]
+			if len(k.split(':')) == 6: # mac?
+				if rest['mac'] == '':
+					rest['mac'] = k
+				else:
+					rest['mac'] = rest['mac'].lower()
 			dnsCACHE[k] = rest
 			logging.info('### wrote new dnsCACHE entry k=%s contents=%s from existing cache' % (k,rest))
+	if dnsCACHE.get(MACBROADCAST,None) == None:
+		for i,tk in header:
+			mb[tk] = ''
+		mb['ip'] = MACBROADCAST
+		mb['fqdname'] = 'BROADCAST'
+		mb['mac'] = MACBROADCAST
+		dnsCACHE[MACBROADCAST] = mb
+	if dnsCACHE.get(IPBROADCAST,None) == None:
+		for i,tk in header:
+			mb[tk] = ''
+		mb['ip'] = IPBROADCAST
+		mb['fqdname'] = 'BROADCAST'
+		mb['mac'] = IPBROADCAST
+		dnsCACHE[IPBROADCAST] = mb
 	return dnsCACHE
+
 
 
 if __name__ == '__main__':
 	if args.pcaps:
-		if args.outpath:
+		if args.outpath != None:
 			if not (os.path.exists(args.outpath)):
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
 				logging.info('Made %s for output' % args.outpath)
+
 		dnsCACHE = {}
-		# {'fqdname':'','whoname':'','city':'','country':'','mac':''} 
+		# {'ip':'', 'fqdname':'','whoname':'','city':'','country':'','mac':''} 
 		# read in optional hostsfile, which is formatted in same way as dnsCACHE file
 		if args.hostsfile:
 			if os.path.isfile(args.hostsfile):
@@ -220,6 +269,11 @@ if __name__ == '__main__':
 			writer.writeheader()
 			for k in dnsCACHE.keys():
 				row = dnsCACHE[k]
+				if row['mac'] > '':
+					if ip_macdict.get(k,None) != row['mac']:
+						s = '## inconsistent supplied hostsfile %s says %s mac is %s but data has ip %s as mac %s' % (args.hostsfile,k,row['mac'],k,ip_macdict.get(k,''))
+						print(s)
+						logging.error(s)
 				row['ip'] = k
 				writer.writerow(row)
 			cached.close()
