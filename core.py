@@ -27,13 +27,15 @@ from ipwhois import IPDefinedError
 
 MULTIMAC = "01:00:5e"
 UNIMAC = "00:00:5e"
+BROADCASTMAC = "ff:ff:ff:ff:ff:ff"
+
 PRIVATE = '(Private LAN address)'
 
 class GraphManager(object):
 	""" Generates and processes the graph based on packets
 	"""
 
-	def __init__(self, packets, layer, args, dnsCACHE,ip_macdict,mac_ipdict):
+	def __init__(self, packets=[], layer=3, args={}, dnsCACHE={},ip_macdict={},mac_ipdict={}):
 		assert layer in [2,3,4],'###GraphManager __init__ got layer = %s. Must be 2,3 or 4' % str(layer)
 		assert len(packets) > 0, '###GraphManager __init__ got empty packets list - nothing useful can be done'
 		self.graph = DiGraph()
@@ -127,6 +129,8 @@ class GraphManager(object):
 				ddict['fqdname'] = 'Multicast'
 			elif ip.startswith(UNIMAC):
 				ddict['fqdname'] = 'Unicast'
+			elif ip == BROADCASTMAC:
+				ddict['fqdname'] = 'Broadcast'
 			else:
 				if ip > '' and not (':' in ip):
 					fqdname = socket.getfqdn(ip)

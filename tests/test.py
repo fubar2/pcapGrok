@@ -17,6 +17,8 @@ from pcapGrok import args
 
 
 dnsCACHE = {}
+ip_macdict = {}
+mac_ipdict = {}
 
 class PcapProcessingTests(unittest.TestCase):
 
