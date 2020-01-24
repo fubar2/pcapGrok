@@ -12,13 +12,14 @@ import copy
 import logging
 import pathlib
 
-dnsCACHEfile = 'pcapgrok_dns_cache.xls'
+dnsCACHEfile = 'pcapgrok_dns_cache.csv'
 logFileName = 'pcapgrok.log'
 IPBROADCAST = '0.0.0.0'
 MACBROADCAST = 'ff:ff:ff:ff:ff:ff'
 PRIVATE = '(Private LAN address)'
+SEPCHAR = ','
 
-logging.basicConfig(filename=logFileName,level=logging.INFO)
+logging.basicConfig(filename=logFileName,level=logging.INFO,filemode='w')
 
 ip_macdict = {}
 mac_ipdict = {}
@@ -124,7 +125,7 @@ def doPcap(pin,args,title,dnsCACHE):
 	if (args.blacklist or args.whitelist):
 		logging.info('### Read', len(pin), 'packets. After applying supplied filters,',len(packets),'are left. wl=',wl,'bl=',bl)
 	ip_macdict,mac_ipdict = checkmacs(packets)
-	print('$$$$ mac_ipdict',mac_ipdict)
+	logging.info('$$$$ mac_ipdict = %s' % mac_ipdict)
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
 		for layer in [2,3,4]:
 			dnsCACHE = doLayer(layer, packets,args.pictures,args,title,dnsCACHE,ip_macdict,mac_ipdict)
@@ -138,7 +139,7 @@ def doPcap(pin,args,title,dnsCACHE):
 	return(dnsCACHE)
 
 def readHostsFile(hostfile,dnsCACHE):
-	din = csv.reader(open(args.hostsfile,'r'),delimiter='\t')
+	din = csv.reader(open(args.hostsfile,'r'),delimiter=SEPCHAR)
 	logging.info("reading hostsfile %s" % args.hostsfile)
 	header = None
 	for i,row in enumerate(din):
@@ -162,7 +163,7 @@ def readHostsFile(hostfile,dnsCACHE):
 			if rest['mac'] > '': # make sure there's a mac keyed entry
 				mrest = copy.copy(rest)
 				mrest['ip'] = rest['mac']
-				mrest['whoname'] = PRIVATE
+				mrest['whoname'] = ''
 				dnsCACHE[rest['mac']] = mrest
 				logging.info('### wrote new dnsCACHE mac entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
 			dnsCACHE[k] = rest
@@ -189,7 +190,7 @@ def readHostsFile(hostfile,dnsCACHE):
 	return(dnsCACHE)
 	
 def readDnsCache(dnsCACHEfile,dnsCACHE):
-	din = csv.reader(open(dnsCACHEfile,'r'),delimiter='\t')
+	din = csv.reader(open(dnsCACHEfile,'r'),delimiter=SEPCHAR)
 	logging.info("reading dnsCACHEfile %s" % dnsCACHEfile)
 	header = None
 	for i,row in enumerate(din):
@@ -255,7 +256,7 @@ if __name__ == '__main__':
 				dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 		header = ['ip','fqdname','city','country','whoname','mac']	
 		with open(dnsCACHEfile,'w') as cached:
-			writer = csv.DictWriter(cached,delimiter='\t',fieldnames = header)
+			writer = csv.DictWriter(cached,delimiter=SEPCHAR,fieldnames = header)
 			writer.writeheader()
 			for k in dnsCACHE.keys():
 				row = dnsCACHE[k]

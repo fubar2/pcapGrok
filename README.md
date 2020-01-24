@@ -8,6 +8,7 @@ It offers
 - default all layers if no single layer requested.
 - whois RDAP 'asn_description' data when geoIP and socket.getfqdn draw blanks.
 - tables of traffic including all available identifying data for each host
+- writes a log with lots of interesting notes as pcapgrok.log 
 
 ## Purpose
 Understanding network traffic from IoT devices is easier with network communication graphs. Scapy has some inbuilt visualisations. 
