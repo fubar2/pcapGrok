@@ -97,10 +97,12 @@ class GraphManager(object):
 		for i in sorted_degrees:
 			if print_stdout:
 				nn = self.dnsCACHE[i]['ip']
+				f = self.dnsCACHE[i]['fqdname']
+				w = self.dnsCACHE[i]['whoname']
 				if (nn == i):
-					print(sorted_degrees[i], i)
+					print('\t'.join([str(sorted_degrees[i]), str(i), f, w]))
 				else:
-					print(sorted_degrees[i],i,nn)
+					print('\t'.join([str(sorted_degrees[i]),str(i), nn, f, w]))
 		return sorted_degrees
 
 

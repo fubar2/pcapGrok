@@ -163,12 +163,13 @@ python main.py -i tests/test.pcap -o test2.png --layer2
 Return hosts with largest numbers of incoming packets:
 
 ```
-python3 main.py -i tests/test.pcap -fi --layer3
-4 172.16.11.12
-1 74.125.19.17
-1 216.34.181.45 slashdot.org
-1 172.16.11.1
-1 96.17.211.172 a96-17-211-172.deploy.static.akamaitechnologies.com
+(venv37) 1 ross@nuc:~/rossgit/pcapGrok$ python3 pcapGrok.py -i tests/test.pcap -fi --layer3
+
+4       172.16.11.12    172.16.11.12    (Private LAN address)
+1       74.125.19.17    74.125.19.17    GOOGLE, US
+1       216.34.181.45   slashdot.org    CENTURYLINK-LEGACY-SAVVIS, US
+1       172.16.11.1     172.16.11.1     (Private LAN address)
+1       96.17.211.172   a96-17-211-172.deploy.static.akamaitechnologies.com     AKAMAI-AS, US
 
 ```
 
