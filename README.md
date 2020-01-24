@@ -21,6 +21,7 @@ helps focus on the traffic of interest, effectively reducing noise from irreleva
 - Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
 - Graph node labels show host FQDN, country and city if available from maxminddb and socket.getfqdn. Otherwise "asn_description" from RDAP whois data is shown.
 Very informative when there is traffic to and from cloud providers, since they are nearly always identified. Violet nodes are outside the LAN. 
+- Graph node colours are informative - yellow=broadcast, violet = remote, powderblue = LAN
 - Edges drawn in thickness proportional to traffic volume
 - Restricting by *mac address* allows focus on a single device at all layers. This removes noise and chatter from other devices obscuring the network graph of interest.
 - Filtering by *protocol* using either whitelist or blacklist - eg ARP, UDP, NTP, RTP...

@@ -28,7 +28,7 @@ from ipwhois import IPDefinedError
 MULTIMAC = "01:00:5e"
 UNIMAC = "00:00:5e"
 BROADCASTMAC = "ff:ff:ff:ff:ff:ff"
-ALLBC = ['Multicast','IGMP','Unicast','Broadcast']
+ALLBC = ['multicast','igmp','unicast','broadcast','broadcasthost']
 
 PRIVATE = '(Private LAN address)'
 
@@ -238,7 +238,7 @@ class GraphManager(object):
 			whoname = ddict['whoname']
 			if whoname != None and whoname != PRIVATE:
 				node.attr['color'] = 'violet' # remote hosts
-			if ddict['fqdname'] in ALLBC:
+			if ddict['fqdname'].lower() in ALLBC:
 				node.attr['color'] = 'lightyellow' # broad/multicast/igmp
 			nodelabel = [node,]
 			if fqdname > '' and fqdname != ip:
