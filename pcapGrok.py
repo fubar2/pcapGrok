@@ -49,7 +49,7 @@ parser.add_argument('-hf', '--hostsfile', required=False, help='Optional hosts f
 
 args = parser.parse_args()
 
-llook = {'DNS':DNS,'UDP':UDP,'ARP':ARP,'NTP':NTP,'IP':IP,'TCP':TCP,'Raw':Raw,'HTTP':HTTP,'RIP':RIP,'RTP':RTP}
+llook = {'BOOTP':BOOTP,'DNS':DNS,'UDP':UDP,'ARP':ARP,'NTP':NTP,'IP':IP,'TCP':TCP,'Raw':Raw,'HTTP':HTTP,'RIP':RIP,'RTP':RTP}
 
 
 		
@@ -123,7 +123,7 @@ def doPcap(pin,args,title,dnsCACHE):
 		bl = [llook[x] for x in args.blacklist]
 		packets = [x for x in pin if sum([x.haslayer(y) for y in bl]) == 0 and x != None]  
 	if (args.blacklist or args.whitelist):
-		logging.info('### Read', len(pin), 'packets. After applying supplied filters,',len(packets),'are left. wl=',wl,'bl=',bl)
+		logging.info('### Read %d packets. After applying supplied filters %d packets are left. wl=%s bl= %s' % (len(pin),len(packets),wl,bl))
 	ip_macdict,mac_ipdict = checkmacs(packets)
 	logging.info('$$$$ mac_ipdict = %s' % mac_ipdict)
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all

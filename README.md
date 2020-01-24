@@ -11,11 +11,14 @@ It offers
 - writes a log with lots of interesting notes as pcapgrok.log 
 
 ## Purpose
-Understanding network traffic from IoT devices is easier with network communication graphs. Scapy has some inbuilt visualisations. 
+Understanding network traffic from IoT devices was the motivation for this code. Network communication graphs show hosts as nodes and communication as edges, making complex relationships easier to see. 
+However, ip and mac addresses are hard to figure out unless additional information about the host is provided such as whois and domain name if available.
+Scapy has some inbuilt visualisations and they can probably be applied to filtered data but we wanted finer control over the graph layout and decent annotation of each node.
 Seeing the packets at different layers is a good first level clarification and PcapVis provided the basis for this application. Mateusz' insight 
-made the images far more comprehensible to me because drawing the information flows separately for each of three layers makes much more immediate sense.
+made PcapVis images far more comprehensible to me because drawing the information flows separately for each of three layers makes much more immediate sense.
 Adding annotation to the graph labels and colouring remote nodes violet helps improve the utility of images. Filtering graphs on protocol and on mac addresses
-helps focus on the traffic of interest, effectively reducing noise from irrelevant chatter among other devices during the packet capture period. 
+helps focus on the traffic of interest, effectively reducing noise from irrelevant chatter among other devices during the packet capture period. The ability to filter on
+protocol also helps simplify very complex graphs by breaking them down.
 
 ## Features
 - Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
