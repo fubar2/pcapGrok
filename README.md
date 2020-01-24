@@ -2,15 +2,12 @@
 
 ## Differences from PcapVis
 pcapGrok is a hack based on PcapVis https://github.com/mateuszk87/PcapViz 
-
-Advantages over PcapVis include:
-
+It offers 
 - additional command line controls 
 - default batch mode for multiple pcap files
 - default all layers if no single layer requested.
 - whois RDAP 'asn_description' data when geoIP and socket.getfqdn draw blanks.
 - tables of traffic including all available identifying data for each host
-- --outpath allows outputs to be sent to a specified directory - will be created if not found
 
 ## Purpose
 Understanding network traffic from IoT devices is easier with network communication graphs. Scapy has some inbuilt visualisations. 
@@ -20,16 +17,16 @@ Adding annotation to the graph labels and colouring remote nodes violet helps im
 helps focus on the traffic of interest, effectively reducing noise from irrelevant chatter among other devices during the packet capture period. 
 
 ## Features
-- Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows. Format is determined by the extension of the --OUT parameter - e.g. --OUT foo.pdf will draw pdfs.
-- Graph node labels show host FQDN, country and city if available from maxminddb and socket.getfqdn. Otherwise "asn_description" from whois data is shown.
+- Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
+- Graph node labels show host FQDN, country and city if available from maxminddb and socket.getfqdn. Otherwise "asn_description" from RDAP whois data is shown.
 Very informative when there is traffic to and from cloud providers, since they are nearly always identified. Violet nodes are outside the LAN. 
 - Edges drawn in thickness proportional to traffic volume
-- Filtering by *mac address* allows focus on a single device at all layers. This removes noise and chatter from other devices obscuring the network graph of interest.
+- Restricting by *mac address* allows focus on a single device at all layers. This removes noise and chatter from other devices obscuring the network graph of interest.
 - Filtering by *protocol* using either whitelist or blacklist - eg ARP, UDP, NTP, RTP...
 - Automatic *separated graphs by protocol* where the number of nodes exceeds NMAX (default is 100). Set to a small number (e.g. 2) to force splitting. Big graph is always drawn but they get pretty dense.
 - Lists the most frequently contacted and frequently sending machines and identifying information
 - command line choice of Graphviz graph layout engine such as dot or sfdp.
-- optionally amalgamates all input pcap files into one before drawing graphs. Default is to draw graphs for each of multiple input pcap files separately.
+- optionally amalgamates all input pcap files into one before drawing graphs. Default is to draw graphs for each input pcap separately.
 
 
 ## Usage
@@ -37,10 +34,11 @@ Very informative when there is traffic to and from cloud providers, since they a
 ```
 usage: pcapGrok.py [-h] [-a] [-i [PCAPS [PCAPS ...]]] [-p PICTURES]
                    [-o OUTPATH] [-g GRAPHVIZ] [--layer2] [--layer3] [--layer4]
-                   [-d] [-w [WHITELIST [WHITELIST ...]]]
+                   [-w [WHITELIST [WHITELIST ...]]]
                    [-b [BLACKLIST [BLACKLIST ...]]]
                    [-r [RESTRICT [RESTRICT ...]]] [-fi] [-fo] [-G GEOPATH]
                    [-l GEOLANG] [-E LAYOUTENGINE] [-s SHAPE] [-n NMAX]
+                   [-hf HOSTSFILE]
 
 Network packet capture (standard .pcap file) topology and message mapper.
 Optional protocol whitelist or blacklist and mac restriction to simplify
@@ -69,8 +67,6 @@ optional arguments:
   --layer2              Device (mac address) topology network graph
   --layer3              IP layer message graph. Default
   --layer4              TCP/UDP message graph
-  -d, --DEBUG           Show debug messages and other (sometimes) very useful
-                        data
   -w [WHITELIST [WHITELIST ...]], --whitelist [WHITELIST [WHITELIST ...]]
                         Whitelist of protocols - only packets matching these
                         layers shown - eg IP Raw HTTP
@@ -93,12 +89,16 @@ optional arguments:
                         Graphviz node shape - circle, diamond, box etc.
   -n NMAX, --nmax NMAX  Automagically draw individual protocols if more than
                         --nmax nodes. 100 seems too many for any one graph.
+  -hf HOSTSFILE, --hostsfile HOSTSFILE
+                        Optional hosts file, following the same format as the
+                        dns cache file, which will have priority over existing
+                        entries in the cache
 
 ```
 
 
 ## "Layers"
-The layers pcapGrok offers are:
+The layers PcapVis offers are:
 
  - device level traffic topology (--layer2), 
  - ip communication (--layer3) and 
@@ -109,30 +109,44 @@ If none are specified, all three are provided in appropriately named output imag
 Each layer yields a distinct network graph from the same set of network packets. This separation makies it much easier to see the data flows at each level rather than mixing them up 
 as many other visualisation packages do.
 
-## Filters
+## Protocol filters
 
 The --whitelist and --blacklist protocol parameters are mutually exclusive - each does what it suggests where a simple to identify notion of "protocol" exists in scapy.
 Protocols including DNS, UDP, ARP, NTP, IP, TCP, Raw, HTTP, RIP, RTP can be filtered out (blacklist) or filtered in (whitelist)at present. Send code to add more please.
 
-The --restrict [mac address] parameter restricts graphs to packets going to or coming from the mac addresses provided. Typically this would be some specific device whose traffic is of interest.
+## MAC address --restrict
+
+The --restrict [mac address] parameter is like a protocol whitelist but restricts all graphs to packets going to or coming from the mac addresses provided. Typically this would be some specific device whose traffic is of interest.
 Restricting the graphs to mac filtered packets has the visual effect of removing uninteresting traffic between other devices contemporaneous with the packet capture.
 
 ## Graph node labels
+
 City, country codes are provided where found in a geoIP lookup using maxminddb. Installation is described below.
 The sockets.getfqdn function is used to look up each ip address encountered. If no information is available, whois data
 is used as a label. This is handy where the device talks to cloud servers - at least you have some idea of who hosts whatever
 applications the device is chatting to. If LAN devices are named in your local /etc/hosts file, these names will be shown on all
 relevant nodes.
 
-A cache file is written to speed up re-runs of the same set of packet files since FQDN and whois lookups incur network and other delay.
+## Cache of local hosts file, whois, socket.getfqdn and geoIP annotation
 
-## Examples from running tests/test.py on the test.pcap file
+To speed processing, a cache is made of all annotation. The default is pcapgrok_dns_cache.xls and if it exists in the current directory, it is read saving a lot of time for repeated runs.
+If it does not exist, it is written before the pcapGrok.py script exits
 
-**Drawing a communication graph (layer 2), segment**
-This can be emulated with a command line like:
+## Local host file
+The -hf parameter allows a local hosts file to be read. This must be in the same tab delimited format as the dnsCACHE.
+```
+ip      fqdname city    country whoname mac
+192.168.4.1     Router                   (Private LAN address)   dc:a6:32:41:12:99
+dc:a6:32:41:12:99        Router                 (Private LAN address)    dc:a6:32:41:12:99
 
 ```
-python pcapGrok.py -i tests/test.pcap -o test2.png --layer2
+
+
+## Examples from running tests/core.py on the test.pcap file
+
+**Drawing a communication graph (layer 2), segment**
+```
+python main.py -i tests/test.pcap -o test2.png --layer2
 ```
 
 ![layer 2 sample](tests/test2.png)
@@ -149,7 +163,7 @@ python pcapGrok.py -i tests/test.pcap -o test2.png --layer2
 Return hosts with largest numbers of incoming packets:
 
 ```
-python3 pcapGrok.py -i tests/test.pcap -fi --layer3
+python3 main.py -i tests/test.pcap -fi --layer3
 4 172.16.11.12
 1 74.125.19.17
 1 216.34.181.45 slashdot.org
@@ -225,7 +239,8 @@ apt-get install graphviz libgraphviz-dev pkg-config
 ```
 
 ### Installation OSX
-pcapGrok has NOT been tested on OSX. For PcapVis, it was noted that Scapy does not work out-of-the-box on OSX. Follow the platform specific instruction from the [scapy website](http://scapy.readthedocs.io/en/latest/installation.html#platform-specific-instructions)
+
+Scapy does not work out-of-the-box on OSX. Follow the platform specific instruction from the [scapy website](http://scapy.readthedocs.io/en/latest/installation.html#platform-specific-instructions)
 
 ```
 brew install graphviz
@@ -237,7 +252,7 @@ brew install https://raw.githubusercontent.com/secdev/scapy/master/.travis/pylib
 
 Unit tests can be run from the tests directory:
 ```
-python3 test.py
+python3 core.py
 ```
 The sample images above are the test output graphs.
 
@@ -245,11 +260,7 @@ Note that there are at present 2 warnings about deprecated features in graphviz 
 Without access to the geoIP data, two of the tests will always fail.
 
 ## Acknowledgement
-
-Most code comes from https://github.com/mateuszk87/PcapViz with many thanks to the original author.
-
 Maxmind ask that this be included - even though we do not distribute the data here it is...
-```
+
 This product includes GeoLite2 data created by MaxMind, available from
 <a href="https://www.maxmind.com">https://www.maxmind.com</a>.
-```
