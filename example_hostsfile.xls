@@ -1,3 +1,2 @@
-ip	fqdname	city	country	whoname	mac
-192.168.4.1	Router			 (Private LAN address)	 dc:a6:32:41:12:99
-dc:a6:32:41:12:99	 Router			(Private LAN address)	 dc:a6:32:41:12:99
+#ip     fqdname city    country whoname mac
+192.168.4.1,Router,,,(Private LAN address),dc:a6:32:41:12:99
