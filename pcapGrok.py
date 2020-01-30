@@ -6,12 +6,22 @@ from core import GraphManager
 from sources import ScapySource
 from scapy.all import *
 from scapy.layers.http import HTTP
+from scapy.layers.dhcp import DHCP
 import os.path
 import csv
 import copy
 import logging
 import pathlib
+from datetime import datetime
+import json
 
+
+
+
+DHCP_PORT = 67
+BOOT_REQ = 1
+
+DHCPDUMP_FILE = 'pcapgrok_dhcp.json'
 dnsCACHEfile = 'pcapgrok_dns_cache.csv'
 logFileName = 'pcapgrok.log'
 IPBROADCAST = '0.0.0.0'
@@ -27,32 +37,34 @@ mac_ipdict = {}
 # put here so we can import it for tests
 
 parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
-parser.add_argument('-a', '--append', action='store_true',default=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
+parser.add_argument('-a', '--append', action='store_true',default=False, required=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
+parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP',required=False)
+parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method - dot, sfdp etc.',required=False)
+parser.add_argument('-fi', '--frequent-in', action='store_true', help='Print frequently contacted nodes to stdout',required=False)
+parser.add_argument('-fo', '--frequent-out', action='store_true', help='Print frequent source nodes to stdout',required=False)
+parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)',required=False)
+parser.add_argument('-G', '--geopath', default='/usr/share/GeoIP/GeoLite2-City.mmdb', help='Path to maxmind geodb data',required=False)
+parser.add_argument('-hf', '--hostsfile', required=False, help='Optional hosts file, following the same format as the dns cache file, which will have priority over existing entries in the cache')
 parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap')
-parser.add_argument('-p', '--pictures', help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
-parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
-parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)')
+parser.add_argument('-k', '--kyddbpath', required=False, default=None, help='Path to KYD database of known fingerbank IoT DHCP signatures to check against any DHCP requests in the packet capture files')
+parser.add_argument('-l', '--geolang', default='en', help='Language to use for geoIP names')
 parser.add_argument('--layer2', action='store_true', help='Device (mac address) topology network graph')
 parser.add_argument('--layer3', action='store_true', help='IP layer message graph. Default')
 parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph')
-parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
-parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP')
-parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
-parser.add_argument('-fi', '--frequent-in', action='store_true', help='Print frequently contacted nodes to stdout')
-parser.add_argument('-fo', '--frequent-out', action='store_true', help='Print frequent source nodes to stdout')
-parser.add_argument('-G', '--geopath', default='/usr/share/GeoIP/GeoLite2-City.mmdb', help='Path to maxmind geodb data')
-parser.add_argument('-l', '--geolang', default='en', help='Language to use for geoIP names')
-parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method - dot, sfdp etc.')
-parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
-parser.add_argument('-hf', '--hostsfile', required=False, help='Optional hosts file, following the same format as the dns cache file, which will have priority over existing entries in the cache')
+parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
+parser.add_argument('-p', '--pictures', help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
+parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
+parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
+parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
 
 args = parser.parse_args()
 
 llook = {'BOOTP':BOOTP,'DNS':DNS,'UDP':UDP,'ARP':ARP,'NTP':NTP,'IP':IP,'TCP':TCP,'Raw':Raw,'HTTP':HTTP,'RIP':RIP,'RTP':RTP}
 
 
-		
+
+
 def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
 	"""
 	run a single layer analysis
@@ -96,12 +108,20 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
 def checkmacs(packets):
 	"""best to determine mac/ip associations for local hosts before filtering on layer - layer4 changes the packet....
 	"""
+	dhcpf = open(DHCPDUMP_FILE,'w')
 	for packet in packets:
 		macs = packet[0].src.lower()
 		if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
 			ips = packet[1].src.lower()
 			ip_macdict[ips] = macs
 			mac_ipdict[macs] = ips
+			if packet.haslayer(DHCP) : # for kyd
+				dhcpp = packet.getlayer(DHCP)
+				dhcpo = dhcpp.options
+				s = str(dhcpo)
+				print('#### found dhcp info = %s' % s)
+				dhcpf.write(s)
+	dhcpf.close()
 	return(ip_macdict,mac_ipdict)
 
 
@@ -221,13 +241,33 @@ def readDnsCache(dnsCACHEfile,dnsCACHE):
 
 
 
+
+
+
+
+
+
 if __name__ == '__main__':
+	kydknown = None
+	# datetime object containing current date and time
+	now = datetime.now()
+	dt = now.strftime("%d/%m/%Y %H:%M:%S")
+	logging.info('pcapGrok starting at %s' % dt)
 	if args.pcaps:
-		if args.outpath != None:
+		if args.outpath:
 			if not (os.path.exists(args.outpath)):
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
 				logging.info('Made %s for output' % args.outpath)
-
+		if args.kyddbpath:
+			kydknown = {}
+			with open(kyddb,'r').readlines() as k:
+				for row in k:
+					if row.startswith('#'):
+						continue
+					rowl = row.rstrip().split('\t')
+					#fields	DHCP_hash	DHCP_FP	FingerBank_Device_name	Score
+					dhcphash,devname,score = rowl
+					kydknown[dhcphash] = [devname,score]
 		dnsCACHE = {}
 		# {'ip':'', 'fqdname':'','whoname':'','city':'','country':'','mac':''} 
 		# read in optional hostsfile, which is formatted in same way as dnsCACHE file
@@ -247,9 +287,15 @@ if __name__ == '__main__':
 			title = '+'.join([os.path.basename(x) for x in args.pcaps])
 			if len(title) > 50:
 				title = title[:50] + '_etc'
+			if False and args.kyddbpath:
+				kydres = kyd(fname)
+				logging.info('Got kyd results %s' % kydres)
 			dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 		else:
 			for fname in args.pcaps:
+				if False and args.kyddbpath:
+					kydres = kyd(fname)
+					logging.info('Got kyd results %s' % kydres)
 				pin = rdpcap(fname)
 				title = os.path.basename(fname)
 				logging.info("Processing %s. Title is %s" % (fname,title))
