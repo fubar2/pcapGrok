@@ -151,9 +151,9 @@ class GraphManager(object):
 						who = IPWhois(ip)
 						qry = who.lookup_rdap(depth=1)
 						whoname = qry['asn_description']
-					except :
+					except Exception as e:
 						whoname = PRIVATE
-						logging.debug('#### IPwhois failed ?timeout? for ip = %s' % ip)
+						logging.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
 					ddict['whoname'] = whoname
 					fullname = '%s\n%s' % (fqdname,whoname)
 				else:
