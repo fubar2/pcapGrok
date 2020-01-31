@@ -94,12 +94,21 @@ class GraphManager(object):
 		return self._sorted_results(unsorted_degrees, print_stdout)
 
 	def _sorted_results(self,unsorted_degrees, print_stdout):
-		sorted_degrees = OrderedDict(sorted(list(unsorted_degrees), key=lambda t: t[1], reverse=True))
+		sorted_degrees = OrderedDict(sorted(list(unsorted_degrees), key=lambda t: int(t[1]), reverse=True))
 		for i in sorted_degrees:
-			if print_stdout:
-				nn = self.dnsCACHE[i]['ip']
-				f = self.dnsCACHE[i]['fqdname']
-				w = self.dnsCACHE[i]['whoname']
+			isplit = i.split(':')
+			if len(isplit) == 2:
+				useip = isplit[0] # port
+			else:
+				useip = i
+			if print_stdout and i != None:
+				nn = self.dnsCACHE.get(useip,{'ip':'unknown'})['ip']
+				if nn:
+					f = self.dnsCACHE[useip]['fqdname']
+					w = self.dnsCACHE[useip]['whoname']
+				else:
+					f = '%s not in dnscache' % i
+					w = '%s whoname - not in dnscache' % i
 				if (nn == i):
 					print('\t'.join([str(sorted_degrees[i]), str(i), f, w]))
 				else:
@@ -142,8 +151,9 @@ class GraphManager(object):
 						who = IPWhois(ip)
 						qry = who.lookup_rdap(depth=1)
 						whoname = qry['asn_description']
-					except IPDefinedError:
+					except :
 						whoname = PRIVATE
+						logging.debug('#### IPwhois failed ?timeout? for ip = %s' % ip)
 					ddict['whoname'] = whoname
 					fullname = '%s\n%s' % (fqdname,whoname)
 				else:

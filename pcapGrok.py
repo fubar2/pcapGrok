@@ -207,7 +207,7 @@ def readHostsFile(hostfile,dnsCACHE):
 		mb['mac'] = IPBROADCAST
 		mb['whoname'] = PRIVATE
 		dnsCACHE[IPBROADCAST] = mb
-	return(dnsCACHE)
+	return dnsCACHE
 	
 def readDnsCache(dnsCACHEfile,dnsCACHE):
 	din = csv.reader(open(dnsCACHEfile,'r'),delimiter=SEPCHAR)
