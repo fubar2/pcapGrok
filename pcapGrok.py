@@ -54,6 +54,7 @@ parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
 parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
 parser.add_argument('-p', '--pictures', help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
+parser.add_argument('-S', '--squishports', action='store_true',default=True, help='Simplify layer 4 network diagrams by ignoring ports - all ports for 1.2.3.4 will appear as one node')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
@@ -282,6 +283,10 @@ if __name__ == '__main__':
 			dnsCACHE = readDnsCache(dnsCACHEfile,dnsCACHE)
 		else:
 			print('### No dnsCACHE file',dnsCACHEfile,'found. Will create a new one')
+		if args.restrict:
+			r = args.restrict
+			rl = [x.lower() for x in r]
+			args.restrict = rl
 		if args.append: # old style amalgamated input
 			pin = ScapySource.load(args.pcaps)
 			title = '+'.join([os.path.basename(x) for x in args.pcaps])

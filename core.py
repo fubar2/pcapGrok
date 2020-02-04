@@ -28,9 +28,10 @@ from ipwhois import IPDefinedError
 MULTIMAC = "01:00:5e"
 UNIMAC = "00:00:5e"
 BROADCASTMAC = "ff:ff:ff:ff:ff:ff"
-ALLBC = ['multicast','igmp','unicast','broadcast','broadcasthost']
+ROUTINGDISCOVERY = "224.0.0."
+ALLBC = ['multicast','igmp','unicast','broadcast','broadcasthost',"routingdiscovery"]
 
-PRIVATE = '(Private LAN address)'
+PRIVATE = 'Local'
 
 class GraphManager(object):
 	""" Generates and processes the graph based on packets
@@ -47,6 +48,7 @@ class GraphManager(object):
 		self.ip_macdict = ip_macdict
 		self.mac_ipdict = mac_ipdict
 		self.dnsCACHE = dnsCACHE
+		self.squishPorts = args.squishports
 		self.title = 'Title goes here'
 		try:
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
@@ -71,6 +73,12 @@ class GraphManager(object):
 			raise ValueError("Other layers than 2,3 and 4 are not supported yet!")
 
 		for src, dst, packet in filter(lambda x: not (x is None), edges):
+			if self.layer == 4 and self.squishPorts: # squish networks by ignoring port
+				if len(src.split(':')) == 2:
+					src = src.split(':')[0]
+				if len(dst.split(':')) == 2:
+					dst = dst.split(':')[0]
+
 			if src in self.graph and dst in self.graph[src]:
 				self.graph[src][dst]['packets'].append(packet)
 			else:
@@ -139,10 +147,16 @@ class GraphManager(object):
 				ddict['whoname'] = 'IGMP'
 			if ip.startswith(MULTIMAC):
 				ddict['fqdname'] = 'Multicast'
+				ddict['whoname'] = 'IGMP'
 			elif ip.startswith(UNIMAC):
 				ddict['fqdname'] = 'Unicast'
+				ddict['whoname'] = 'IGMP'
 			elif ip == BROADCASTMAC:
 				ddict['fqdname'] = 'Broadcast'
+				ddict['whoname'] = 'Local'
+			elif ip.startswith(ROUTINGDISCOVERY):
+				ddict['fqdname'] = 'Routingdiscovery'
+				ddict['whoname'] = 'Local'
 			else:
 				if ip > '' and not (':' in ip):
 					fqdname = socket.getfqdn(ip)
@@ -215,8 +229,15 @@ class GraphManager(object):
 		if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
 			src = packet[1].src
 			dst = packet[1].dst
-			_ = packet[2]
-			return "%s:%i" % (src, _.sport), "%s:%i" % (dst, _.dport), packet
+			try: # fails with mirai sample 
+				sp = str(packet[2].sport)
+			except:
+				sp = 'malformed'
+			try: # fails with mirai sample 
+				dp = str(packet[2].dport)
+			except:
+				dp = 'malformed'
+			return "%s:%s" % (src, sp), "%s:%s" % (dst, dp), packet
 
 	def draw(self, filename=None):
 		graph = self.get_graphviz_format()
@@ -256,7 +277,6 @@ class GraphManager(object):
 				nodelabel.append(fqdname)
 			if city > '' or country > '':
 				nodelabel.append('\n')
-					
 				nodelabel.append('%s %s' % (city,country))
 			if whoname and whoname > '':
 				nodelabel.append('\n')
