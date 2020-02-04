@@ -177,7 +177,7 @@ def readHostsFile(hostfile,dnsCACHE):
 			rest = {}
 			for i,tk in enumerate(header):
 				if (len(row) > (i)):
-					rest[tk] = row[i]
+					rest[tk] = row[i].lower()
 				else:
 					rest[tk] = ''
 					print('$$$ bad row %d in hostsfile = %s' % (i,row)) 
