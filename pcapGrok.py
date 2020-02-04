@@ -26,7 +26,7 @@ dnsCACHEfile = 'pcapgrok_dns_cache.csv'
 logFileName = 'pcapgrok.log'
 IPBROADCAST = '0.0.0.0'
 MACBROADCAST = 'ff:ff:ff:ff:ff:ff'
-PRIVATE = '(Private LAN address)'
+PRIVATE = 'Local'
 SEPCHAR = ','
 
 logging.basicConfig(filename=logFileName,level=logging.INFO,filemode='w')
@@ -181,10 +181,12 @@ def readHostsFile(hostfile,dnsCACHE):
 				else:
 					rest[tk] = ''
 					print('$$$ bad row %d in hostsfile = %s' % (i,row)) 
+			if rest['whoname'].rstrip() == '(Private LAN address)':
+				rest['whoname'] = PRIVATE
 			if rest['mac'] > '': # make sure there's a mac keyed entry
 				mrest = copy.copy(rest)
 				mrest['ip'] = rest['mac']
-				mrest['whoname'] = ''
+				mrest['whoname'] = PRIVATE
 				dnsCACHE[rest['mac']] = mrest
 				logging.info('### wrote new dnsCACHE mac entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
 			dnsCACHE[k] = rest

@@ -5,6 +5,9 @@ forked from mateuszk87/PcapViz
 changed geoIP lookup to use maxminddb
 added reverse DNS lookup and cache with host names added to node labels
 added CL parameters to adjust image layout and shapes
+added broadcast/igmp annotation
+added squishports to simplify layer4 networks so only 1 node per host for all ports
+
 """
 
 
@@ -260,17 +263,20 @@ class GraphManager(object):
 			node.attr['shape'] = self.args.shape
 			node.attr['fontsize'] = '11'
 			node.attr['width'] = '0.5'
-			node.attr['color'] = 'powderblue' # assume all are local hosts
-			node.attr['style'] = 'filled,rounded'
+			node.attr['color'] = 'yellowgreen' # assume all are local hosts
+			node.attr['fontcolor'] = 'yellow4'
+			node.attr['style'] = 'rounded' ## filled,
 			country = ddict['country']
 			city = ddict['city']
 			fqdname = ddict['fqdname']
 			mac = ddict['mac']
 			whoname = ddict['whoname']
-			if whoname != None and whoname != PRIVATE:
+			if whoname != '' and whoname != PRIVATE:
 				node.attr['color'] = 'violet' # remote hosts
+				node.attr['fontcolor'] = 'darkviolet'
 			if ddict['fqdname'].lower() in ALLBC:
-				node.attr['color'] = 'lightyellow' # broad/multicast/igmp
+				node.attr['color'] = 'yellowgreen' # broad/multicast/igmp
+				node.attr['fontcolor'] = 'yellow4' # broad/multicast/igmp
 			nodelabel = [node,]
 			if fqdname > '' and fqdname != ip:
 				nodelabel.append('\n')
@@ -280,6 +286,10 @@ class GraphManager(object):
 				nodelabel.append('%s %s' % (city,country))
 			if whoname and whoname > '':
 				nodelabel.append('\n')
+				if len(whoname) > 30:
+					l = len(whoname)
+					pos = l // 2
+					whoname = whoname[:pos] + '\n' + whoname[pos:]
 				nodelabel.append(whoname)
 			ns = ''.join(nodelabel)
 			node.attr['label'] = ns
