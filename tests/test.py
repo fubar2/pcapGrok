@@ -38,6 +38,7 @@ class PcapProcessingTests(unittest.TestCase):
 
 	def test_build_graph_layer4(self):
 		packets = ScapySource.load(['test.pcap'])
+		args.squishports = False
 		g = GraphManager(packets, layer=4,args=args,dnsCACHE=dnsCACHE)
 		self.assertEqual(36, g.graph.number_of_edges())
 
