@@ -177,16 +177,16 @@ def readHostsFile(hostfile,dnsCACHE):
 			rest = {}
 			for i,tk in enumerate(header):
 				if (len(row) > (i)):
-					rest[tk] = row[i].lower()
+					rest[tk] = row[i]
+					if i == (len(row) - 1): # mac
+						rest[tk] = rest[tk].lower()
 				else:
 					rest[tk] = ''
 					print('$$$ bad row %d in hostsfile = %s' % (i,row)) 
-			if rest['whoname'].rstrip() == '(Private LAN address)':
-				rest['whoname'] = PRIVATE
 			if rest['mac'] > '': # make sure there's a mac keyed entry
 				mrest = copy.copy(rest)
 				mrest['ip'] = rest['mac']
-				mrest['whoname'] = PRIVATE
+				# mrest['whoname'] = PRIVATE
 				dnsCACHE[rest['mac']] = mrest
 				logging.info('### wrote new dnsCACHE mac entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
 			dnsCACHE[k] = rest
@@ -201,6 +201,7 @@ def readHostsFile(hostfile,dnsCACHE):
 		mb['whoname'] = PRIVATE
 		mb['mac'] = MACBROADCAST
 		dnsCACHE[MACBROADCAST] = mb
+		
 	if dnsCACHE.get(IPBROADCAST,None) == None:
 		mb = {}
 		for tk in header:

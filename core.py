@@ -264,7 +264,7 @@ class GraphManager(object):
 			node.attr['fontsize'] = '11'
 			node.attr['width'] = '0.5'
 			node.attr['color'] = 'yellowgreen' # assume all are local hosts
-			node.attr['fontcolor'] = 'yellow4'
+			node.attr['fontcolor'] = 'olivedrab4'
 			node.attr['style'] = 'rounded' ## filled,
 			country = ddict['country']
 			city = ddict['city']
@@ -274,9 +274,9 @@ class GraphManager(object):
 			if whoname != '' and whoname != PRIVATE:
 				node.attr['color'] = 'violet' # remote hosts
 				node.attr['fontcolor'] = 'darkviolet'
-			if ddict['fqdname'].lower() in ALLBC:
+			if ddict['fqdname'].lower() in ALLBC or whoname == PRIVATE:
 				node.attr['color'] = 'yellowgreen' # broad/multicast/igmp
-				node.attr['fontcolor'] = 'yellow4' # broad/multicast/igmp
+				node.attr['fontcolor'] = 'olivedrab4' # broad/multicast/igmp
 			nodelabel = [node,]
 			if fqdname > '' and fqdname != ip:
 				nodelabel.append('\n')
