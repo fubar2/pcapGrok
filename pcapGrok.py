@@ -29,8 +29,6 @@ MACBROADCAST = 'ff:ff:ff:ff:ff:ff'
 PRIVATE = 'Local'
 SEPCHAR = ','
 
-logging.basicConfig(filename=logFileName,level=logging.INFO,filemode='w')
-
 ip_macdict = {}
 mac_ipdict = {}
 
@@ -262,6 +260,9 @@ if __name__ == '__main__':
 			if not (os.path.exists(args.outpath)):
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
 				logging.info('Made %s for output' % args.outpath)
+			logging.basicConfig(filename=os.path.join(args.outpath,logFileName),level=logging.INFO,filemode='w')
+		else:
+			logging.basicConfig(filename=logFileName,level=logging.INFO,filemode='w')
 		if args.kyddbpath:
 			kydknown = {}
 			with open(kyddb,'r').readlines() as k:
