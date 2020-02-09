@@ -52,7 +52,7 @@ parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
 parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
 parser.add_argument('-p', '--pictures', help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
-parser.add_argument('-S', '--squishports', action='store_true',default=True, help='Simplify layer 4 network diagrams by ignoring ports - all ports for 1.2.3.4 will appear as one node')
+parser.add_argument('-S', '--squishports', action='store_true',default=False, help='Simplify layer 4 network diagrams by ignoring ports - all ports for 1.2.3.4 will appear as one node')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
@@ -237,6 +237,10 @@ def readDnsCache(dnsCACHEfile,dnsCACHE):
 					rest['mac'] = k
 				else:
 					rest['mac'] = rest['mac'].lower()
+			if rest['whoname'] != PRIVATE and rest['whoname'] > '':
+				omac = rest['mac']
+				rest['mac'] = '' # must be a furriner
+				logging.debug('Blew away mac %s since whoname is %s in readdnscache' % (omac,rest['whoname']))
 			dnsCACHE[k] = rest
 			logging.info('### wrote new dnsCACHE entry k=%s contents=%s from existing cache' % (k,rest))
 	return dnsCACHE

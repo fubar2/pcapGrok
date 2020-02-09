@@ -8,6 +8,18 @@ added CL parameters to adjust image layout and shapes
 added broadcast/igmp annotation
 added squishports to simplify layer4 networks so only 1 node per host for all ports
 
+For private networks use:
+
+    Range from 10.0.0.0 to 10.255.255.255 — a 10.0.0.0 network with a 255.0.0.0 or an /8 (8-bit) mask
+    Range from 172.16.0.0 to 172.31.255.255 — a 172.16.0.0 network with a 255.240.0.0 (or a 12-bit) mask
+    A 192.168.0.0 to 192.168.255.255 range, which is a 192.168.0.0 network masked by 255.255.0.0 or /16
+    A special range 100.64.0.0 to 100.127.255.255 with a 255.192.0.0 or /10 network mask; this subnet is recommended according to rfc6598 for use as an address pool for CGN (Carrier-Grade NAT)
+privateipstarts = ['10.',192.168.',]
+more = ["172.%d" % i for i in range(16,32)]
+privatestarts.append(more)
+more =  ["100.%d" % i for i in range(64,128)]
+privatestarts.append(more)	
+if any [x.startswith[y] for y in privateipstarts]: # is private
 """
 
 
@@ -53,6 +65,13 @@ class GraphManager(object):
 		self.dnsCACHE = dnsCACHE
 		self.squishPorts = args.squishports
 		self.title = 'Title goes here'
+		privatestarts = ['10.','192.168.',]
+		more = ["172.%d" % i for i in range(16,32)]
+		privatestarts += more
+		more =  ["100.%d" % i for i in range(64,128)]
+		privatestarts += more
+		self.privates = privatestarts
+		# if any ([x.startswith[y] for y in privates]): # is private
 		try:
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
 		except:
@@ -126,7 +145,11 @@ class GraphManager(object):
 					print('\t'.join([str(sorted_degrees[i]),str(i), nn, f, w]))
 		return sorted_degrees
 
-
+	def isLocal(self,ip):
+		print(self.privates)
+		res = any ([ip.startswith(y) for y in self.privates]) # is private
+		return res
+		
 	def _retrieve_node_info(self, node, packet):				
 		"""cache all (slow!) fqdn reverse dns lookups from ip"""
 		self.data[node] = {'packet':packet}
@@ -142,8 +165,9 @@ class GraphManager(object):
 			ddict['ip'] = ip	
 			city = ''
 			country = ''
+			localip = self.isLocal(ip)
 			mymac = self.ip_macdict.get(ip,None)
-			if mymac:
+			if mymac and localip:
 				ddict['mac'] = mymac
 			if ip.startswith('240.0'): # is igmp
 				ddict['fqdname'] = 'Multicast'
@@ -160,8 +184,12 @@ class GraphManager(object):
 			elif ip.startswith(ROUTINGDISCOVERY):
 				ddict['fqdname'] = 'Routingdiscovery'
 				ddict['whoname'] = 'Local'
+			elif ip == '0.0.0.0':
+				ddict['whoname'] = 'Local'
+			elif localip:
+				ddict['whoname'] = 'Local'
 			else:
-				if ip > '' and not (':' in ip):
+				if ip > '' and not (':' in ip) and not localip:
 					fqdname = socket.getfqdn(ip)
 					ddict['fqdname'] = fqdname
 					try:
