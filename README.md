@@ -23,7 +23,7 @@ protocol also helps simplify very complex graphs by breaking them down.
 ## Features
 - Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
 - Graph node labels show host FQDN, country and city if available from maxminddb and socket.getfqdn. Otherwise "asn_description" from RDAP whois data is shown.
-Very informative when there is traffic to and from cloud providers, since they are nearly always identified. Violet nodes are outside the LAN. 
+- fqdname/whois/geo lookup is threaded (supply -P for slower serial behaviour) and results are saved as cache file - can be reused. These are very informative when there is traffic to and from cloud providers, since they are nearly always identified. Violet nodes are outside the LAN. 
 - Graph node colours are informative - yellow=broadcast, violet = remote, powderblue = LAN
 - Edges drawn in thickness proportional to traffic volume
 - Restricting by *mac address* allows focus on a single device at all layers. This removes noise and chatter from other devices obscuring the network graph of interest.
@@ -37,13 +37,13 @@ Very informative when there is traffic to and from cloud providers, since they a
 ## Usage
 
 ```
-usage: pcapGrok.py [-h] [-a] [-i [PCAPS [PCAPS ...]]] [-p PICTURES]
-                   [-o OUTPATH] [-g GRAPHVIZ] [--layer2] [--layer3] [--layer4]
+usage: pcapGrok.py [-h] [-a] [-b [BLACKLIST [BLACKLIST ...]]]
+                   [-E LAYOUTENGINE] [-fi] [-fo] [-g GRAPHVIZ] [-G GEOPATH]
+                   [-hf HOSTSFILE] [-i [PCAPS [PCAPS ...]]] [-k KYDDBPATH]
+                   [-l GEOLANG] [--layer2] [--layer3] [--layer4] [-n NMAX]
+                   [-o OUTPATH] [-p PICTURES] [-P] [-S]
+                   [-r [RESTRICT [RESTRICT ...]]] [-s SHAPE]
                    [-w [WHITELIST [WHITELIST ...]]]
-                   [-b [BLACKLIST [BLACKLIST ...]]]
-                   [-r [RESTRICT [RESTRICT ...]]] [-fi] [-fo] [-G GEOPATH]
-                   [-l GEOLANG] [-E LAYOUTENGINE] [-s SHAPE] [-n NMAX]
-                   [-hf HOSTSFILE]
 
 Network packet capture (standard .pcap file) topology and message mapper.
 Optional protocol whitelist or blacklist and mac restriction to simplify
@@ -54,50 +54,60 @@ optional arguments:
   -a, --append          Append multiple input files before processing as
                         PcapVis previously did. New default is to batch
                         process each input pcap file separately.
+  -b [BLACKLIST [BLACKLIST ...]], --blacklist [BLACKLIST [BLACKLIST ...]]
+                        Blacklist of protocols - NONE of the packets having
+                        these layers shown eg DNS NTP ARP RTP RIP
+  -E LAYOUTENGINE, --layoutengine LAYOUTENGINE
+                        Graph layout method - dot, sfdp etc.
+  -fi, --frequent-in    Print frequently contacted nodes to stdout
+  -fo, --frequent-out   Print frequent source nodes to stdout
+  -g GRAPHVIZ, --graphviz GRAPHVIZ
+                        Graph will be exported for downstream applications to
+                        the specified file (dot format)
+  -G GEOPATH, --geopath GEOPATH
+                        Path to maxmind geodb data
+  -hf HOSTSFILE, --hostsfile HOSTSFILE
+                        Optional hosts file, following the same format as the
+                        dns cache file, which will have priority over existing
+                        entries in the cache
   -i [PCAPS [PCAPS ...]], --pcaps [PCAPS [PCAPS ...]]
                         Mandatory space delimited list of capture files to be
                         analyzed - wildcards work too - e.g. -i Y*.pcap
+  -k KYDDBPATH, --kyddbpath KYDDBPATH
+                        Path to KYD database of known fingerbank IoT DHCP
+                        signatures to check against any DHCP requests in the
+                        packet capture files
+  -l GEOLANG, --geolang GEOLANG
+                        Language to use for geoIP names
+  --layer2              Device (mac address) topology network graph
+  --layer3              IP layer message graph. Default
+  --layer4              TCP/UDP message graph
+  -n NMAX, --nmax NMAX  Automagically draw individual protocols if more than
+                        --nmax nodes. 100 seems too many for any one graph.
+  -o OUTPATH, --outpath OUTPATH
+                        All outputs will be written to the supplied path.
+                        Default (if none supplied) is current working
+                        directory
   -p PICTURES, --pictures PICTURES
                         Image filename stub for all images - layers and
                         protocols are prepended to make file names. Use (e.g.)
                         .pdf or .png extension to specify the image type. PDF
                         is best for large graphs
-  -o OUTPATH, --outpath OUTPATH
-                        All outputs will be written to the supplied path.
-                        Default (if none supplied) is current working
-                        directory
-  -g GRAPHVIZ, --graphviz GRAPHVIZ
-                        Graph will be exported for downstream applications to
-                        the specified file (dot format)
-  --layer2              Device (mac address) topology network graph
-  --layer3              IP layer message graph. Default
-  --layer4              TCP/UDP message graph
-  -w [WHITELIST [WHITELIST ...]], --whitelist [WHITELIST [WHITELIST ...]]
-                        Whitelist of protocols - only packets matching these
-                        layers shown - eg IP Raw HTTP
-  -b [BLACKLIST [BLACKLIST ...]], --blacklist [BLACKLIST [BLACKLIST ...]]
-                        Blacklist of protocols - NONE of the packets having
-                        these layers shown eg DNS NTP ARP RTP RIP
+  -P, --paralleldnsOFF  Turn OFF threading for parallel dns/whois queries.
+                        Default is to use threading
+  -S, --squishportsOFF  Turn OFF layer4 port squishing to simplify networks by
+                        ignoring ports - all port activity is summed to the
+                        host ip. Default is to squish ports
   -r [RESTRICT [RESTRICT ...]], --restrict [RESTRICT [RESTRICT ...]]
                         Whitelist of device mac addresses - restrict all
                         graphs to traffic to or device(s). Specify mac
                         address(es) as "xx:xx:xx:xx:xx:xx"
-  -fi, --frequent-in    Print frequently contacted nodes to stdout
-  -fo, --frequent-out   Print frequent source nodes to stdout
-  -G GEOPATH, --geopath GEOPATH
-                        Path to maxmind geodb data
-  -l GEOLANG, --geolang GEOLANG
-                        Language to use for geoIP names
-  -E LAYOUTENGINE, --layoutengine LAYOUTENGINE
-                        Graph layout method - dot, sfdp etc.
   -s SHAPE, --shape SHAPE
                         Graphviz node shape - circle, diamond, box etc.
-  -n NMAX, --nmax NMAX  Automagically draw individual protocols if more than
-                        --nmax nodes. 100 seems too many for any one graph.
-  -hf HOSTSFILE, --hostsfile HOSTSFILE
-                        Optional hosts file, following the same format as the
-                        dns cache file, which will have priority over existing
-                        entries in the cache
+  -w [WHITELIST [WHITELIST ...]], --whitelist [WHITELIST [WHITELIST ...]]
+                        Whitelist of protocols - only packets matching these
+                        layers shown - eg IP Raw HTTP
+
 
 ```
 
