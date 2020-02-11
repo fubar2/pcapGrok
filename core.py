@@ -40,6 +40,19 @@ import maxminddb
 from ipwhois import IPWhois
 from ipwhois import IPDefinedError
 
+from datetime import datetime
+import json
+import threading
+from queue import Queue
+import time
+import socket
+import subprocess
+import sys
+
+
+
+
+
 MULTIMAC = "01:00:5e"
 UNIMAC = "00:00:5e"
 BROADCASTMAC = "ff:ff:ff:ff:ff:ff"
@@ -47,6 +60,113 @@ ROUTINGDISCOVERY = "224.0.0."
 ALLBC = ['multicast','igmp','unicast','broadcast','broadcasthost',"routingdiscovery"]
 
 PRIVATE = 'Local'
+
+NTHREADS=250
+
+class parDNS():
+	""" dns/whois lookups parallel for speed
+	"""
+
+	def __init__(self,lookmeup,privates,ip_macdict,geo_ip,geo_lang):
+		self.lookmeup = lookmeup
+		self.drec =  {'ip':'','fqdname':'','whoname':'','city':'','country':'','mac':''}
+		self.drecs = {}
+		self.dnsq_lock = threading.Lock()
+		self.dnsq = Queue()
+		self.privates = privates
+		self.ip_macdict = ip_macdict
+		self.geo_ip = geo_ip
+		self.geo_lang = geo_lang
+		
+	def lookup(self,ip):
+			ddict = copy.copy(self.drec)
+			ddict['ip'] = ip	
+			ns = ip.split(':')
+			city = ''
+			country = ''
+			localip = any ([ip.startswith(y) for y in self.privates]) # is private
+			mymac = self.ip_macdict.get(ip,None)
+			if mymac and localip:
+				ddict['mac'] = mymac
+			if ip.startswith('240.0'): # is igmp
+				ddict['fqdname'] = 'Multicast'
+				ddict['whoname'] = 'IGMP'
+			if ip.startswith(MULTIMAC):
+				ddict['fqdname'] = 'Multicast'
+				ddict['whoname'] = 'IGMP'
+			elif ip.startswith(UNIMAC):
+				ddict['fqdname'] = 'Unicast'
+				ddict['whoname'] = 'IGMP'
+			elif ip == BROADCASTMAC:
+				ddict['fqdname'] = 'Broadcast'
+				ddict['whoname'] = 'Local'
+			elif ip.startswith(ROUTINGDISCOVERY):
+				ddict['fqdname'] = 'Routingdiscovery'
+				ddict['whoname'] = 'Local'
+			elif ip == '0.0.0.0':
+				ddict['whoname'] = 'Local'
+			elif localip:
+				ddict['whoname'] = 'Local'
+			else:
+				if ip > '' and not (':' in ip) and not localip:
+					fqdname = socket.getfqdn(ip)
+					ddict['fqdname'] = fqdname
+					try:
+						who = IPWhois(ip)
+						qry = who.lookup_rdap(depth=1)
+						whoname = qry['asn_description']
+					except Exception as e:
+						whoname = PRIVATE
+						logging.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
+					ddict['whoname'] = whoname
+					fullname = '%s\n%s' % (fqdname,whoname)
+				else:
+					ddict['fqdname'] = ''
+					if len(ns) == 6 and ddict['mac'] == '':
+						ddict['mac'] = ip
+				city = ''
+				country = ''
+				if ip > '' and self.geo_ip and ddict['whoname'] != PRIVATE and (':' not in ip):			
+					mmdbrec = self.geo_ip.get(ip)
+					if mmdbrec != None:
+						countryrec = mmdbrec.get('country',None)
+						cityrec = mmdbrec.get('city',None)
+						if countryrec: # some records have one but not the other....
+							country = countryrec['names'].get(self.geo_lang,None)
+						if cityrec:
+							city =  cityrec['names'].get(self.geo_lang,None)
+					else:
+						logging.error("could not load GeoIP data for ip %s" % ip)
+			ddict['city'] = city
+			ddict['country'] = country
+			with self.dnsq_lock: # make sure no race
+				self.drecs[ip] = ddict
+
+		
+	def threader(self):
+		while True:
+			ip = self.dnsq.get()
+			self.lookup(ip)
+			self.dnsq.task_done()
+		
+
+	def doRun(self):
+		self.started = time.time()
+		for x in range(NTHREADS):
+			 t = threading.Thread(target=self.threader)
+			 # classify as a daemon, so they will die when the main dies
+			 t.daemon = True
+			 # begins, must come after daemon definition
+			 t.start()
+		for ip in self.lookmeup:
+			self.dnsq.put(ip)
+		# wait until the q terminates.
+		self.dnsq.join()
+		dur = time.time() - self.started
+		logging.info('IP lookup n= %d for cache took %.2f seconds' % (len(self.lookmeup),dur))
+		return self.drecs
+
+
 
 class GraphManager(object):
 	""" Generates and processes the graph based on packets
@@ -58,6 +178,7 @@ class GraphManager(object):
 		self.graph = DiGraph()
 		self.layer = layer
 		self.geo_ip = None
+		self.geo_lang = args.geolang
 		self.args = args
 		self.data = {}
 		self.ip_macdict = ip_macdict
@@ -65,7 +186,7 @@ class GraphManager(object):
 		self.dnsCACHE = dnsCACHE
 		self.squishPorts = args.squishports
 		self.title = 'Title goes here'
-		privatestarts = ['10.','192.168.',]
+		privatestarts = ['10.','192.168.','255.255.255.255','0.0.0.0']
 		more = ["172.%d" % i for i in range(16,32)]
 		privatestarts += more
 		more =  ["100.%d" % i for i in range(64,128)]
@@ -107,9 +228,11 @@ class GraphManager(object):
 				self.graph.add_edge(src, dst)
 				self.graph[src][dst]['packets'] = [packet]
 
-		for node in self.graph.nodes():
-			self._retrieve_node_info(node,packet)
-
+		if args.paralleldns:
+			self._fast_retrieve_node_info()
+		else:
+			for node in self.graph:
+				self._retrieve_node_info(node)
 		for src, dst in self.graph.edges():
 			self._retrieve_edge_info(src, dst)
 
@@ -148,10 +271,36 @@ class GraphManager(object):
 	def isLocal(self,ip):
 		res = any ([ip.startswith(y) for y in self.privates]) # is private
 		return res
+
+	def _fast_retrieve_node_info(self):				
+		"""parallel all (slow!) fqdn reverse dns lookups from ip"""
+		lookmeup = [] # parallel for ip not in cache yet
+		for node in self.graph.nodes:
+			ns = node.split(':')
+			if len(ns) <= 2: # has a port - not a mac or ipv6 address
+				ip = ns[0]
+			else:
+				ip = node # might be ipv6 or mac - use as key
+			ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
+			if ddict == None:
+				lookmeup.append(ip)
+		if len(lookmeup) > 0:
+			fastdns = parDNS(lookmeup,self.privates,self.ip_macdict,self.geo_ip,self.geo_lang)
+			drecs = fastdns.doRun()
+			kees = drecs.keys()
+			for k in kees:
+				if self.dnsCACHE.get(k,None):
+					logging.debug('Odd - key %s was already in self.dnsCACHE after fast lookup = %s - fast = %s - not replaced' % (k,self.dnsCACHE[k],drecs[k]))
+				else:
+					self.dnsCACHE[k] = drecs[k]
+					logging.info('## fast looked up %s and added %s' % (k,drecs[k]))
+		else:
+			logging.debug('_fast_retrieve_node found no ip addresses missing from dnsCACHE')
 		
-	def _retrieve_node_info(self, node, packet):				
+
+		
+	def _retrieve_node_info(self, node):				
 		"""cache all (slow!) fqdn reverse dns lookups from ip"""
-		self.data[node] = {'packet':packet}
 		drec = {'ip':'','fqdname':'','whoname':'','city':'','country':'','mac':''}
 		ns = node.split(':')
 		if len(ns) <= 2: # has a port - not a mac or ipv6 address
@@ -213,10 +362,8 @@ class GraphManager(object):
 						cityrec = mmdbrec.get('city',None)
 						if countryrec: # some records have one but not the other....
 							country = countryrec['names'].get(self.args.geolang,None)
-							self.data[node]['country'] = country
 						if cityrec:
 							city =  cityrec['names'].get(self.args.geolang,None)
-							self.data[node]['city'] = city
 					else:
 						logging.error("could not load GeoIP data for ip %s" % ip)
 			ddict['city'] = city

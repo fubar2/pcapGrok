@@ -14,6 +14,18 @@ import logging
 import pathlib
 from datetime import datetime
 import json
+import threading
+from queue import Queue
+import time
+import socket
+import subprocess
+import sys
+
+
+LASTPORT=65535
+NTHREADS=250
+print_lock = threading.Lock()
+q = Queue()
 
 
 
@@ -52,7 +64,8 @@ parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
 parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
 parser.add_argument('-p', '--pictures', help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
-parser.add_argument('-S', '--squishports', action='store_true',default=False, help='Simplify layer 4 network diagrams by ignoring ports - all ports for 1.2.3.4 will appear as one node')
+parser.add_argument('-P', '--paralleldns', action='store_false',default=True, help='Turn OFF default to use threading for parallel dns/whois queries')
+parser.add_argument('-S', '--squishports', action='store_false',default=True, help='Turn OFF default to simplify layer 4 network diagrams by ignoring ports - all ports for 1.2.3.4 will appear as one node')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
@@ -74,7 +87,7 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
 	nn = len(g.graph.nodes())
 	if args.pictures:
 		if nn > args.nmax:
-			logging.warning('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
+			logging.debug('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
 			for kind in llook.keys():
 				subset = [x for x in packets if x != None and x.haslayer(kind)]  
 				if len(subset) > 0:
@@ -86,9 +99,9 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
 							ofn = os.path.join(args.outpath,ofn)
 						sg.title = '%s Only, Layer %d using packets from %s' % (kind,layer,title)
 						sg.draw(filename = ofn)
-						logging.info('drew %s %d nodes' % (ofn,nn))
+						logging.debug('drew %s %d nodes' % (ofn,nn))
 					else:
-						logging.info('found %d nodes so not a very worthwhile graph' % nn)
+						logging.debug('found %d nodes so not a very worthwhile graph' % nn)
 		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
@@ -118,7 +131,7 @@ def checkmacs(packets):
 				dhcpp = packet.getlayer(DHCP)
 				dhcpo = dhcpp.options
 				s = str(dhcpo)
-				print('#### found dhcp info = %s' % s)
+				logging.debug('#### found dhcp info = %s' % s)
 				dhcpf.write(s)
 	dhcpf.close()
 	return(ip_macdict,mac_ipdict)
@@ -132,7 +145,9 @@ def doPcap(pin,args,title,dnsCACHE):
 	bl=[]
 	wl=[]
 	if args.whitelist != None and args.blacklist != None:
-		print('### Parameter error: Specify --blacklist or specify --whitelist but not both together please.')
+		s = '### Parameter error: Specify --blacklist or specify --whitelist but not both together please.'
+		print(s)
+		logging.debug(s)
 		sys.exit(1)
 	packets = pin
 	if args.whitelist: 
@@ -142,7 +157,7 @@ def doPcap(pin,args,title,dnsCACHE):
 		bl = [llook[x] for x in args.blacklist]
 		packets = [x for x in pin if sum([x.haslayer(y) for y in bl]) == 0 and x != None]  
 	if (args.blacklist or args.whitelist):
-		logging.info('### Read %d packets. After applying supplied filters %d packets are left. wl=%s bl= %s' % (len(pin),len(packets),wl,bl))
+		logging.debug('### Read %d packets. After applying supplied filters %d packets are left. wl=%s bl= %s' % (len(pin),len(packets),wl,bl))
 	ip_macdict,mac_ipdict = checkmacs(packets)
 	logging.info('$$$$ mac_ipdict = %s' % mac_ipdict)
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
@@ -159,7 +174,7 @@ def doPcap(pin,args,title,dnsCACHE):
 
 def readHostsFile(hostfile,dnsCACHE):
 	din = csv.reader(open(args.hostsfile,'r'),delimiter=SEPCHAR)
-	logging.info("reading hostsfile %s" % args.hostsfile)
+	logging.debug("reading hostsfile %s" % args.hostsfile)
 	header = None
 	for i,row in enumerate(din):
 		if len(row) == 0:
@@ -169,7 +184,7 @@ def readHostsFile(hostfile,dnsCACHE):
 		elif header == None:
 			header = row
 			s = '## hostsfile %s header = %s' % (args.hostsfile,header)
-			logging.info(s)
+			logging.debug(s)
 		else:
 			k = row[0].lower()
 			rest = {}
@@ -180,15 +195,17 @@ def readHostsFile(hostfile,dnsCACHE):
 						rest[tk] = rest[tk].lower()
 				else:
 					rest[tk] = ''
-					print('$$$ bad row %d in hostsfile = %s' % (i,row)) 
+					s = '$$$ bad row %d in hostsfile = %s' % (i,row)
+					print(s) 
+					logging.debug(s)
 			if rest['mac'] > '': # make sure there's a mac keyed entry
 				mrest = copy.copy(rest)
 				mrest['ip'] = rest['mac']
 				# mrest['whoname'] = PRIVATE
 				dnsCACHE[rest['mac']] = mrest
-				logging.info('### wrote new dnsCACHE mac entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
+				logging.debug('### wrote new dnsCACHE mac entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
 			dnsCACHE[k] = rest
-			logging.info('### wrote new dnsCACHE entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
+			logging.debug('### wrote new dnsCACHE entry k=%s contents=%s from supplied hostsfile %s' % (k,rest,hostfile))
 	
 	if dnsCACHE.get(MACBROADCAST,None) == None:
 		mb = {}
@@ -223,7 +240,7 @@ def readDnsCache(dnsCACHEfile,dnsCACHE):
 		elif header == None:
 			header = row
 			s = '## dnscache %s header = %s' % (dnsCACHEfile,header)
-			logging.info(s)
+			logging.debug(s)
 		else:
 			k = row[0].lower()
 			# data loaded from hostsfile has priority over data from cachefile
@@ -242,14 +259,8 @@ def readDnsCache(dnsCACHEfile,dnsCACHE):
 				rest['mac'] = '' # must be a furriner
 				logging.debug('Blew away mac %s since whoname is %s in readdnscache' % (omac,rest['whoname']))
 			dnsCACHE[k] = rest
-			logging.info('### wrote new dnsCACHE entry k=%s contents=%s from existing cache' % (k,rest))
+			logging.debug('### wrote new dnsCACHE entry k=%s contents=%s from existing cache' % (k,rest))
 	return dnsCACHE
-
-
-
-
-
-
 
 
 
@@ -258,15 +269,16 @@ if __name__ == '__main__':
 	# datetime object containing current date and time
 	now = datetime.now()
 	dt = now.strftime("%d/%m/%Y %H:%M:%S")
-	logging.info('pcapGrok starting at %s' % dt)
 	if args.pcaps:
 		if args.outpath:
 			if not (os.path.exists(args.outpath)):
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
-				logging.info('Made %s for output' % args.outpath)
-			logging.basicConfig(filename=os.path.join(args.outpath,logFileName),level=logging.INFO,filemode='w')
+			logging.basicConfig(filename=os.path.join(args.outpath,logFileName),level=logging.DEBUG,filemode='w')
+			logging.debug('pcapGrok starting at %s' % dt)
+			logging.debug('Made %s for output' % args.outpath)
 		else:
-			logging.basicConfig(filename=logFileName,level=logging.INFO,filemode='w')
+			logging.basicConfig(filename=logFileName,level=logging.DEBUG,filemode='w')
+			logging.debug('pcapGrok starting at %s' % dt)
 		if args.kyddbpath:
 			kydknown = {}
 			with open(kyddb,'r').readlines() as k:
@@ -284,13 +296,13 @@ if __name__ == '__main__':
 			if os.path.isfile(args.hostsfile):
 				dnsCACHE = readHostsFile(args.hostsfile,dnsCACHE)
 			else:
-				logging.info("## Invalid hostsfile %s supplied, skipping" % args.hostsfile)
+				logging.debug("## Invalid hostsfile %s supplied, skipping" % args.hostsfile)
 		else:
-			logging.info("### hostsfile not supplied")
+			logging.debug("### hostsfile not supplied")
 		if os.path.isfile(dnsCACHEfile):
 			dnsCACHE = readDnsCache(dnsCACHEfile,dnsCACHE)
 		else:
-			print('### No dnsCACHE file',dnsCACHEfile,'found. Will create a new one')
+			logging.debug('### No dnsCACHE file %s found. Will create a new one' % dnsCACHEfile)
 		if args.restrict:
 			r = args.restrict
 			rl = [x.lower() for x in r]
@@ -302,7 +314,7 @@ if __name__ == '__main__':
 				title = title[:50] + '_etc'
 			if False and args.kyddbpath:
 				kydres = kyd(fname)
-				logging.info('Got kyd results %s' % kydres)
+				logging.debug('Got kyd results %s' % kydres)
 			dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 		else:
 			for fname in args.pcaps:
@@ -311,7 +323,7 @@ if __name__ == '__main__':
 					logging.info('Got kyd results %s' % kydres)
 				pin = rdpcap(fname)
 				title = os.path.basename(fname)
-				logging.info("Processing %s. Title is %s" % (fname,title))
+				logging.debug("Processing %s. Title is %s" % (fname,title))
 				dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 		header = ['ip','fqdname','city','country','whoname','mac']	
 		with open(dnsCACHEfile,'w') as cached:
@@ -329,7 +341,8 @@ if __name__ == '__main__':
 					row['ip'] = k
 				writer.writerow(row)
 			cached.close()
-		logging.info('wrote %d rows to %s' % (len(dnsCACHE),dnsCACHEfile))
+		logging.debug('wrote %d rows to %s' % (len(dnsCACHE),dnsCACHEfile))
 	else:
 		print('## input file parameter -i or --pcaps is mandatory - stopping')
+		logging.debug('## input file parameter -i or --pcaps is mandatory - stopping')
 
