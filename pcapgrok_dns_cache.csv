@@ -1,0 +1,9 @@
+ip,fqdname,city,country,whoname,mac
+dc:a6:32:41:12:99,Router,,,(Private LAN address),dc:a6:32:41:12:99
+192.168.4.1,Router,,,(Private LAN address),dc:a6:32:41:12:99
+20:39:56:f4:93:24,Phone,,,(Private LAN address),20:39:56:f4:93:24
+192.168.4.195,Phone,,,(Private LAN address),20:39:56:f4:93:24
+00:0c:43:9d:3d:25,IPCamera,,,(Private LAN address),00:0c:43:9d:3d:25
+192.168.4.147,IPCamera,,,(Private LAN address),00:0c:43:9d:3d:25
+ff:ff:ff:ff:ff:ff,BROADCAST,,,Local,ff:ff:ff:ff:ff:ff
+0.0.0.0,BROADCAST,,,Local,0.0.0.0
