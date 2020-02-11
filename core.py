@@ -113,7 +113,8 @@ class parDNS():
 						whoname = qry['asn_description']
 					except Exception as e:
 						whoname = PRIVATE
-						logging.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
+						with self.dnsq_lock: # make sure no race
+							logging.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
 					ddict['whoname'] = whoname
 					fullname = '%s\n%s' % (fqdname,whoname)
 				else:
@@ -137,7 +138,7 @@ class parDNS():
 			ddict['country'] = country
 			with self.dnsq_lock: # make sure no race
 				self.drecs[ip] = ddict
-
+				logging.debug('fast got city country %s,%s fqdname %s for ip %s' % (city,country,ddict['fqdname'],ip))
 		
 	def threader(self):
 		while True:
@@ -419,9 +420,6 @@ class GraphManager(object):
 		graph.graph_attr['fontsize'] = 20
 		graph.graph_attr['fontcolor'] = 'blue'
 		for node in graph.nodes():
-			if node not in self.data:
-				# node might be deleted, because it's not legit etc.
-				continue
 			snode = str(node)
 			ssnode = snode.split(':') # look for mac or a port on the ip
 			if len(ssnode) <= 2:
