@@ -181,7 +181,8 @@ class GraphManager(object):
 		self.ip_macdict = ip_macdict
 		self.mac_ipdict = mac_ipdict
 		self.dnsCACHE = dnsCACHE
-		self.squishPorts = args.squishports
+		self.squishPorts = args.squishportsOFF == False
+		self.parallelDNS = args.paralleldnsOFF == False
 		self.title = 'Title goes here'
 		privatestarts = ['10.','192.168.','255.255.255.255','0.0.0.0']
 		more = ["172.%d" % i for i in range(16,32)]
@@ -225,11 +226,12 @@ class GraphManager(object):
 				self.graph.add_edge(src, dst)
 				self.graph[src][dst]['packets'] = [packet]
 
-		if args.paralleldns:
+		if self.parallelDNS:
 			self._fast_retrieve_node_info()
 		else:
 			for node in self.graph:
 				self._retrieve_node_info(node)
+
 		for src, dst in self.graph.edges():
 			self._retrieve_edge_info(src, dst)
 
