@@ -421,6 +421,9 @@ class GraphManager(object):
 		graph.graph_attr['labelloc'] = 't'
 		graph.graph_attr['fontsize'] = 20
 		graph.graph_attr['fontcolor'] = 'blue'
+		graph.graph_attr['size'] = "1000,1000"
+		graph.graph_attr['resolution'] = 72
+		graph.graph_attr['bgcolor'] = "#FFFFFFFF"
 		for node in graph.nodes():
 			snode = str(node)
 			ssnode = snode.split(':') # look for mac or a port on the ip
