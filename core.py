@@ -146,7 +146,6 @@ class GraphManager(object):
 		return sorted_degrees
 
 	def isLocal(self,ip):
-		print(self.privates)
 		res = any ([ip.startswith(y) for y in self.privates]) # is private
 		return res
 		

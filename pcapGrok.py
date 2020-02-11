@@ -81,10 +81,10 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
 					sg = GraphManager(subset,layer, args, dnsCACHE, ip_macdict, mac_ipdict)
 					nn = len(sg.graph.nodes())
 					if nn > 1:
-						ofn = '%s_%d_layer%d_%s_%s' % (kind,nn,layer,title.replace('+','_'),args.pictures)
+						ofn = '%s_%dnodes_layer%d_%s_%s' % (kind,nn,layer,title.replace('+','_'),args.pictures)
 						if args.outpath:
 							ofn = os.path.join(args.outpath,ofn)
-						sg.title = 'Layer %d using packets from %s' % (layer,title)
+						sg.title = '%s Only, Layer %d using packets from %s' % (kind,layer,title)
 						sg.draw(filename = ofn)
 						logging.info('drew %s %d nodes' % (ofn,nn))
 					else:
