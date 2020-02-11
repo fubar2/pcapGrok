@@ -49,10 +49,6 @@ import socket
 import subprocess
 import sys
 
-
-
-
-
 MULTIMAC = "01:00:5e"
 UNIMAC = "00:00:5e"
 BROADCASTMAC = "ff:ff:ff:ff:ff:ff"
