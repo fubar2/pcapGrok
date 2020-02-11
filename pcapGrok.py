@@ -13,21 +13,6 @@ import copy
 import logging
 import pathlib
 from datetime import datetime
-import json
-import threading
-from queue import Queue
-import time
-import socket
-import subprocess
-import sys
-
-
-LASTPORT=65535
-NTHREADS=250
-print_lock = threading.Lock()
-q = Queue()
-
-
 
 
 DHCP_PORT = 67
