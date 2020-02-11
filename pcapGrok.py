@@ -105,13 +105,12 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
 		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
-		g.draw(filename=ofn)
+		if nn > 1:
+			g.draw(filename=ofn)
 	if args.frequent_in:
 		g.get_in_degree()
-
 	if args.frequent_out:
 		g.get_out_degree()
-
 	if args.graphviz:
 		g.get_graphviz_format(args.graphviz)
 	dnsCACHE = copy.copy(g.dnsCACHE)
