@@ -406,16 +406,22 @@ def doTshark(title,pcapf):
      ucp_messages,tree
      wsp,stat
 
-	
+	,'tshark --export-objects "http,%s"' % args.outpath
 	"""
-	rclist = ["-z hosts","-z dns,tree", "-z dhcp,stat", "-z conv,tcp", "-z conv,udp", "-z conv,ip", "-z endpoints,udp", "-z io,phs","-z http,tree","-P"]
-	rfnames = ['hosts','dns','dhcpstat','tcpconv','udpconv','ipconv','udpendpoints','iophs','httptree','pdump']
-	for i,com in enumerate(rclist):
-		ofn = "tshark_%s_%s.txt" % (rfnames[i],title)
-		ofn = os.path.join(args.outpath,ofn)
-		cl = "tshark -q %s -r %s > %s" % (com,pcapf,ofn)
-		os.system(cl)
-
+	rclist = " ".join(["-z hosts","-z dns,tree", "-z dhcp,stat", "-z conv,tcp", "-z conv,udp", "-z conv,ip", "-z endpoints,udp", \
+	   "-z io,phs","-z http,tree"])
+  
+	ofn = "tshark_%s.log" % (title)
+	ofn = os.path.join(args.outpath,ofn)
+	cl = "tshark -q %s -r %s > %s" % (rclist,pcapf,ofn)
+	os.system(cl)
+	
+	outsub = os.path.join(args.outpath,'tsharkfiles')
+	os.makedirs(outsub, exist_ok=True)
+	ofn = "tshark_%s_%s.log" % ('Files',title)
+	cl = 'tshark -r %s --export-objects "http,%s" > %s' % (pcapf,outsub,ofn)
+	
+	os.system(cl)
 
 if __name__ == '__main__':
 	kydknown = None
