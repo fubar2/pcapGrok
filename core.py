@@ -10,10 +10,10 @@ added squishports to simplify layer4 networks so only 1 node per host for all po
 
 For private networks use:
 
-    Range from 10.0.0.0 to 10.255.255.255 — a 10.0.0.0 network with a 255.0.0.0 or an /8 (8-bit) mask
-    Range from 172.16.0.0 to 172.31.255.255 — a 172.16.0.0 network with a 255.240.0.0 (or a 12-bit) mask
-    A 192.168.0.0 to 192.168.255.255 range, which is a 192.168.0.0 network masked by 255.255.0.0 or /16
-    A special range 100.64.0.0 to 100.127.255.255 with a 255.192.0.0 or /10 network mask; this subnet is recommended according to rfc6598 for use as an address pool for CGN (Carrier-Grade NAT)
+	Range from 10.0.0.0 to 10.255.255.255 — a 10.0.0.0 network with a 255.0.0.0 or an /8 (8-bit) mask
+	Range from 172.16.0.0 to 172.31.255.255 — a 172.16.0.0 network with a 255.240.0.0 (or a 12-bit) mask
+	A 192.168.0.0 to 192.168.255.255 range, which is a 192.168.0.0 network masked by 255.255.0.0 or /16
+	A special range 100.64.0.0 to 100.127.255.255 with a 255.192.0.0 or /10 network mask; this subnet is recommended according to rfc6598 for use as an address pool for CGN (Carrier-Grade NAT)
 privateipstarts = ['10.',192.168.',]
 more = ["172.%d" % i for i in range(16,32)]
 privatestarts.append(more)
@@ -48,6 +48,21 @@ import time
 import socket
 import subprocess
 import sys
+# wordclouds
+from wordcloud import WordCloud
+from collections import Counter
+from random import randint
+import matplotlib
+from matplotlib import cm
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+
+
+protos = {'BOOTP':BOOTP,'DNS':DNS,'UDP':UDP,'ARP':ARP,'NTP':NTP,'IP':IP,'TCP':TCP,'Raw':Raw,'HTTP':HTTP,'RIP':RIP,'RTP':RTP}
+
 
 MULTIMAC = "01:00:5e"
 UNIMAC = "00:00:5e"
@@ -173,6 +188,7 @@ class GraphManager(object):
 		assert layer in [2,3,4],'###GraphManager __init__ got layer = %s. Must be 2,3 or 4' % str(layer)
 		assert len(packets) > 0, '###GraphManager __init__ got empty packets list - nothing useful can be done'
 		self.graph = DiGraph()
+		self.agraph = None
 		self.layer = layer
 		self.geo_ip = None
 		self.geo_lang = args.geolang
@@ -476,6 +492,7 @@ class GraphManager(object):
 			edge.attr['penwidth'] = min(max(0.05,connection['connections'] * 1.0 / len(self.graph.nodes())), 2.0)
 		graph.layout(prog=self.args.layoutengine)
 		graph.draw(filename)
+		self.agraph = graph
 
 	def get_graphviz_format(self, filename=None):
 		agraph = networkx.drawing.nx_agraph.to_agraph(self.graph)
@@ -485,3 +502,60 @@ class GraphManager(object):
 		if filename:
 			agraph.write(filename)
 		return agraph
+
+
+	def random_color_func(self, word=None, font_size=None, position=None,  orientation=None, font_path=None, random_state=None):
+		"""https://stackoverflow.com/questions/43043263/word-cloud-in-python-with-customised-colour"""
+		h = int(360.0 * 21.0 / 255.0) # orange base
+		s = int(100.0 * 255.0 / 255.0)
+		l = int(100.0 * float(randint(60, 120)) / 255.0)
+
+		return "hsl({}, {}%, {}%)".format(h, s, l)		
+			
+	def wordClouds(self,outfname,protoc):
+		ipfq = {}
+		graph = self.agraph # assume already drawn
+		for node in self.graph.nodes():
+			dnrec = self.dnsCACHE.get(node,None)
+			if dnrec:
+				ipfq[dnrec['ip']] = dnrec['fqdname']
+		totalbytes = 0
+		weights = {}
+		for edge in graph.edges():
+			src = ipfq.get(edge[0],edge[0])
+			weights[src] = {}
+			for dest in self.graph[edge[0]].keys():
+				cnx = self.graph[edge[0]][dest]
+				tb = cnx['transmitted']
+				totalbytes += tb
+				destfq = ipfq.get(dest,dest)
+				if weights[src].get(destfq,None):
+					weights[src][destfq] += tb
+				else:
+					weights[src][destfq] = tb
+		for node in graph.nodes():
+			snode = str(node)
+			ssnode = snode.split(':') # look for mac or a port on the ip
+			if len(ssnode) <= 2:
+				ip = ssnode[0]
+			else:
+				ip = snode
+			fqname = ipfq.get(ip,ip)
+			wts = weights.get(fqname,None)
+			if wts and len(wts.keys()) > 1:
+				nn = len(wts.keys())
+				destfqlist = wts.keys()
+				wc = WordCloud(background_color="white",width=1200, height=1000,max_words=200,
+				 min_font_size=20, color_func = self.random_color_func).generate_from_frequencies(wts)
+				f = plt.figure(figsize=(10, 10))
+				plt.imshow(wc, interpolation='bilinear')
+				plt.axis('off')
+				plt.title('%s %s destinations word cloud' % (fqname,protoc), color="blue")
+				# plt.show()
+				ofss = outfname.split('destwordcloud') # better be there
+				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
+				f.savefig(ofn, bbox_inches='tight')
+				plt.clf() 
+				del f
+
+

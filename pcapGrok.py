@@ -54,6 +54,7 @@ parser.add_argument('-S', '--squishportsOFF', action='store_true',default=False,
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
+parser.add_argument('-W', '--wordcloudsOFF', action='store_true',default=False, help='Turn OFF layer 3 wordcloud generation for each host')
 
 args = parser.parse_args()
 
@@ -79,12 +80,18 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
 					sg = GraphManager(subset,layer, args, dnsCACHE, ip_macdict, mac_ipdict)
 					nn = len(sg.graph.nodes())
 					if nn > 1:
-						ofn = '%s_%dnodes_layer%d_%s_%s' % (kind,nn,layer,title.replace('+','_'),args.pictures)
+						ofn = '%s_layer%d_%s_%s' % (kind,layer,title.replace('+','_'),args.pictures)
 						if args.outpath:
 							ofn = os.path.join(args.outpath,ofn)
 						sg.title = '%s Only, Layer %d using packets from %s' % (kind,layer,title)
 						sg.draw(filename = ofn)
 						logging.debug('drew %s %d nodes' % (ofn,nn))
+						if layer == 3 and not args.wordcloudsOFF:
+							ofn = '%s_destwordcloud_layer%d_%s_%s' % (kind,layer,title.replace('+','_'),args.pictures)
+							if args.outpath:
+								ofn = os.path.join(args.outpath,ofn)
+							sg.wordClouds(ofn,kind)
+							logging.debug('drew %s wordcloud to %s' % (kind,ofn))
 					else:
 						logging.debug('found %d nodes so not a very worthwhile graph' % nn)
 		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
@@ -92,6 +99,12 @@ def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
 			ofn = os.path.join(args.outpath,ofn)
 		if nn > 1:
 			g.draw(filename=ofn)
+			if layer == 3 and not args.wordcloudsOFF:
+				ofn = '%s_destwordcloud_layer%d_%s_%s' % ('All',layer,title.replace('+','_'),args.pictures)
+				if args.outpath:
+					ofn = os.path.join(args.outpath,ofn)
+				g.wordClouds(ofn,"All")
+				logging.debug('drew %s wordcloud to %s' % ('All',ofn))
 	if args.frequent_in:
 		g.get_in_degree()
 	if args.frequent_out:
