@@ -53,6 +53,7 @@ parser.add_argument('-P', '--paralleldnsOFF', action='store_true',default=False,
 parser.add_argument('-S', '--squishportsOFF', action='store_true',default=False, help='Turn OFF layer4 port squishing to simplify networks by ignoring ports - all port activity is summed to the host ip. Default is to squish ports')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
+parser.add_argument('-T', '--tsharkON', action='store_true',default=False, help='Turn tshark reports on')
 parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols - only packets matching these layers shown - eg IP Raw HTTP')
 parser.add_argument('-W', '--wordcloudsOFF', action='store_true',default=False, help='Turn OFF layer 3 wordcloud generation for each host')
 
@@ -259,6 +260,161 @@ def readDnsCache(dnsCACHEfile,dnsCACHE):
 			logging.debug('### wrote new dnsCACHE entry k=%s contents=%s from existing cache' % (k,rest))
 	return dnsCACHE
 
+def doTshark(title,pcapf):
+	"""grab and process - sample part - fugly - some have table headers
+	cl = "tshark -q -z hosts -z dns,tree -z bootp,stat -z conv,tcp -z conv,udp -z conv,ip -z endpoints,udp -z io,phs -r %s" % (infname)	
+	tshark: Invalid -z argument "credentials"; it must be one of:
+     afp,srt
+     ancp,tree
+     ansi_a,bsmap
+     ansi_a,dtap
+     ansi_map
+     bacapp_instanceid,tree
+     bacapp_ip,tree
+     bacapp_objectid,tree
+     bacapp_service,tree
+     camel,counter
+     camel,srt
+     collectd,tree
+     conv,bluetooth
+     conv,eth
+     conv,fc
+     conv,fddi
+     conv,ip
+     conv,ipv6
+     conv,ipx
+     conv,jxta
+     conv,mptcp
+     conv,ncp
+     conv,rsvp
+     conv,sctp
+     conv,sll
+     conv,tcp
+     conv,tr
+     conv,udp
+     conv,usb
+     conv,wlan
+     dcerpc,srt
+     dests,tree
+     dhcp,stat
+     diameter,avp
+     diameter,srt
+     dns,tree
+     endpoints,bluetooth
+     endpoints,eth
+     endpoints,fc
+     endpoints,fddi
+     endpoints,ip
+     endpoints,ipv6
+     endpoints,ipx
+     endpoints,jxta
+     endpoints,mptcp
+     endpoints,ncp
+     endpoints,rsvp
+     endpoints,sctp
+     endpoints,sll
+     endpoints,tcp
+     endpoints,tr
+     endpoints,udp
+     endpoints,usb
+     endpoints,wlan
+     expert
+     f5_tmm_dist,tree
+     f5_virt_dist,tree
+     fc,srt
+     flow,any
+     flow,icmp
+     flow,icmpv6
+     flow,lbm_uim
+     flow,tcp
+     follow,http
+     follow,tcp
+     follow,tls
+     follow,udp
+     gsm_a
+     gsm_a,bssmap
+     gsm_a,dtap_cc
+     gsm_a,dtap_gmm
+     gsm_a,dtap_mm
+     gsm_a,dtap_rr
+     gsm_a,dtap_sacch
+     gsm_a,dtap_sm
+     gsm_a,dtap_sms
+     gsm_a,dtap_ss
+     gsm_a,dtap_tp
+     gsm_map,operation
+     gtp,srt
+     h225,counter
+     h225_ras,rtd
+     hart_ip,tree
+     hosts
+     hpfeeds,tree
+     http,stat
+     http,tree
+     http2,tree
+     http_req,tree
+     http_seq,tree
+     http_srv,tree
+     icmp,srt
+     icmpv6,srt
+     io,phs
+     io,stat
+     ip_hosts,tree
+     ip_srcdst,tree
+     ipv6_dests,tree
+     ipv6_hosts,tree
+     ipv6_ptype,tree
+     ipv6_srcdst,tree
+     isup_msg,tree
+     lbmr_queue_ads_queue,tree
+     lbmr_queue_ads_source,tree
+     lbmr_queue_queries_queue,tree
+     lbmr_queue_queries_receiver,tree
+     lbmr_topic_ads_source,tree
+     lbmr_topic_ads_topic,tree
+     lbmr_topic_ads_transport,tree
+     lbmr_topic_queries_pattern,tree
+     lbmr_topic_queries_pattern_receiver,tree
+     lbmr_topic_queries_receiver,tree
+     lbmr_topic_queries_topic,tree
+     ldap,srt
+     mac-lte,stat
+     megaco,rtd
+     mgcp,rtd
+     mtp3,msus
+     ncp,srt
+     osmux,tree
+     plen,tree
+     proto,colinfo
+     ptype,tree
+     radius,rtd
+     rlc-lte,stat
+     rpc,programs
+     rpc,srt
+     rtp,streams
+     rtsp,stat
+     rtsp,tree
+     sametime,tree
+     scsi,srt
+     sctp,stat
+     sip,stat
+     smb,sids
+     smb,srt
+     smb2,srt
+     smpp_commands,tree
+     sv
+     ucp_messages,tree
+     wsp,stat
+
+	
+	"""
+	rclist = ["-z hosts","-z dns,tree", "-z dhcp,stat", "-z conv,tcp", "-z conv,udp", "-z conv,ip", "-z endpoints,udp", "-z io,phs","-z http,tree","-P"]
+	rfnames = ['hosts','dns','dhcpstat','tcpconv','udpconv','ipconv','udpendpoints','iophs','httptree','pdump']
+	for i,com in enumerate(rclist):
+		ofn = "tshark_%s_%s.txt" % (rfnames[i],title)
+		ofn = os.path.join(args.outpath,ofn)
+		cl = "tshark -q %s -r %s > %s" % (com,pcapf,ofn)
+		os.system(cl)
 
 
 if __name__ == '__main__':
@@ -313,6 +469,8 @@ if __name__ == '__main__':
 				kydres = kyd(fname)
 				logging.debug('Got kyd results %s' % kydres)
 			dnsCACHE = doPcap(pin,args,title,dnsCACHE)
+			if args.tsharkON:
+				doTshark(title,fname)
 		else:
 			for fname in args.pcaps:
 				if False and args.kyddbpath:
@@ -322,6 +480,8 @@ if __name__ == '__main__':
 				title = os.path.basename(fname)
 				logging.debug("Processing %s. Title is %s" % (fname,title))
 				dnsCACHE = doPcap(pin,args,title,dnsCACHE)
+				if args.tsharkON:
+					doTshark(title,fname)
 		header = ['ip','fqdname','city','country','whoname','mac']	
 		with open(dnsCACHEfile,'w') as cached:
 			writer = csv.DictWriter(cached,delimiter=SEPCHAR,fieldnames = header)
