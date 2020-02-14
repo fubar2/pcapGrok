@@ -13,7 +13,7 @@ import copy
 import logging
 import pathlib
 from datetime import datetime
-
+import sys
 
 DHCP_PORT = 67
 BOOT_REQ = 1
@@ -423,12 +423,27 @@ def doTshark(title,pcapf):
 	
 	os.system(cl)
 
+def isScapypcap(ppath):
+	"""test path to see if can be read
+	"""
+	ok = False
+	try:
+		foo = scapy.utils.PcapReader(ppath)
+		ok = True
+	except:
+		s = str(ppath) + 'is not a valid pcap file'
+		logging.debug(s)
+	
+	return ok
+
 if __name__ == '__main__':
 	kydknown = None
 	# datetime object containing current date and time
 	now = datetime.now()
 	dt = now.strftime("%d/%m/%Y %H:%M:%S")
-	if args.pcaps:
+	infiles = [x for x in args.pcaps if os.path.isfile(x)]	
+	realfiles = [x for x in infiles if isScapypcap(x)]
+	if len(realfiles) > 0:
 		if args.outpath:
 			if not (os.path.exists(args.outpath)):
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
@@ -467,8 +482,8 @@ if __name__ == '__main__':
 			rl = [x.lower() for x in r]
 			args.restrict = rl
 		if args.append: # old style amalgamated input
-			pin = ScapySource.load(args.pcaps)
-			title = '+'.join([os.path.basename(x) for x in args.pcaps])
+			pin = ScapySource.load(realfiles)
+			title = '+'.join([os.path.basename(x) for x in realfiles])
 			if len(title) > 50:
 				title = title[:50] + '_etc'
 			if False and args.kyddbpath:
@@ -478,16 +493,21 @@ if __name__ == '__main__':
 			if args.tsharkON:
 				doTshark(title,fname)
 		else:
-			for fname in args.pcaps:
+			for fname in realfiles:
 				if False and args.kyddbpath:
 					kydres = kyd(fname)
 					logging.info('Got kyd results %s' % kydres)
-				pin = rdpcap(fname)
+				try:
+					pin = rdpcap(fname)
+				except:
+					logging.debug('%s is not a valid scapy pcap file' % fname)
+					continue
 				title = os.path.basename(fname)
 				logging.debug("Processing %s. Title is %s" % (fname,title))
 				dnsCACHE = doPcap(pin,args,title,dnsCACHE)
 				if args.tsharkON:
 					doTshark(title,fname)
+				
 		header = ['ip','fqdname','city','country','whoname','mac']	
 		with open(dnsCACHEfile,'w') as cached:
 			writer = csv.DictWriter(cached,delimiter=SEPCHAR,fieldnames = header)
@@ -506,6 +526,8 @@ if __name__ == '__main__':
 			cached.close()
 		logging.debug('wrote %d rows to %s' % (len(dnsCACHE),dnsCACHEfile))
 	else:
-		print('## input file parameter -i or --pcaps is mandatory - stopping')
-		logging.debug('## input file parameter -i or --pcaps is mandatory - stopping')
+		s = '## input file parameter -i or --pcap  = %s but no valid pcap files found - stopping' % args.pcaps
+		print(s)
+		logging.debug(s)
+		sys.exit(1)
 
