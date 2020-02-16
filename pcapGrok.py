@@ -64,55 +64,55 @@ llook = {'BOOTP':BOOTP,'DNS':DNS,'UDP':UDP,'ARP':ARP,'NTP':NTP,'IP':IP,'TCP':TCP
 
 
 
-def doLayer(layer, packets,fname,args,title,dnsCACHE,ip_macdict,mac_ipdict):
+def doLayer(layer, packets,fname,args, gM):
 	"""
 	run a single layer analysis
 	"""
 	args.nmax = int(args.nmax)
-	g = GraphManager(packets, layer, args, dnsCACHE, ip_macdict,mac_ipdict)
-	g.title = "Layer %d using packets from %s" % (layer,title)
-	nn = len(g.graph.nodes())
+	gM.title = "Layer %d using packets from %s" % (layer,title)
+	nn = len(gM.graph.nodes())
 	if args.pictures:
 		if nn > args.nmax:
 			logging.debug('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
 			for kind in llook.keys():
 				subset = [x for x in packets if x != None and x.haslayer(kind)]  
 				if len(subset) > 0:
-					sg = GraphManager(subset,layer, args, dnsCACHE, ip_macdict, mac_ipdict)
-					nn = len(sg.graph.nodes())
+					gM.reset(subset,layer)
+					nn = len(gM.graph.nodes())
 					if nn > 1:
 						ofn = '%s_layer%d_%s_%s' % (kind,layer,title.replace('+','_'),args.pictures)
 						if args.outpath:
 							ofn = os.path.join(args.outpath,ofn)
-						sg.title = '%s Only, Layer %d using packets from %s' % (kind,layer,title)
-						sg.draw(filename = ofn)
+						gM.title = '%s Only, Layer %d using packets from %s' % (kind,layer,title)
+						gM.draw(filename = ofn)
 						logging.debug('drew %s %d nodes' % (ofn,nn))
 						if layer == 3 and not args.wordcloudsOFF:
 							ofn = '%s_destwordcloud_layer%d_%s_%s' % (kind,layer,title.replace('+','_'),args.pictures)
 							if args.outpath:
 								ofn = os.path.join(args.outpath,ofn)
-							sg.wordClouds(ofn,kind)
+							gM.wordClouds(ofn,kind)
 							logging.debug('drew %s wordcloud to %s' % (kind,ofn))
 					else:
 						logging.debug('found %d nodes so not a very worthwhile graph' % nn)
+		gM.reset(packets,layer)
 		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
 		if nn > 1:
-			g.draw(filename=ofn)
+			gM.draw(filename=ofn)
 			if layer == 3 and not args.wordcloudsOFF:
 				ofn = '%s_destwordcloud_layer%d_%s_%s' % ('All',layer,title.replace('+','_'),args.pictures)
 				if args.outpath:
 					ofn = os.path.join(args.outpath,ofn)
-				g.wordClouds(ofn,"All")
+				gM.wordClouds(ofn,"All")
 				logging.debug('drew %s wordcloud to %s' % ('All',ofn))
 	if args.frequent_in:
-		g.get_in_degree()
+		gM.get_in_degree()
 	if args.frequent_out:
-		g.get_out_degree()
+		gM.get_out_degree()
 	if args.graphviz:
-		g.get_graphviz_format(args.graphviz)
-	dnsCACHE = copy.copy(g.dnsCACHE)
+		gM.get_graphviz_format(args.graphviz)
+	dnsCACHE = copy.copy(gM.dnsCACHE)
 	return(dnsCACHE)
 
 def checkmacs(packets):
@@ -158,16 +158,17 @@ def doPcap(pin,args,title,dnsCACHE):
 		logging.debug('### Read %d packets. After applying supplied filters %d packets are left. wl=%s bl= %s' % (len(pin),len(packets),wl,bl))
 	ip_macdict,mac_ipdict = checkmacs(packets)
 	logging.info('$$$$ mac_ipdict = %s' % mac_ipdict)
+	gM = GraphManager(args, dnsCACHE,ip_macdict,mac_ipdict,title)
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
 		for layer in [2,3,4]:
-			dnsCACHE = doLayer(layer, packets,args.pictures,args,title,dnsCACHE,ip_macdict,mac_ipdict)
+			dnsCACHE = doLayer(layer, packets,args.pictures,args, gM)
 	else:
 		layer = 3
 		if args.layer2:
 			layer = 2
 		elif args.layer4:
 			layer = 4
-		dnsCACHE = doLayer(layer,packets,args.outpath,args,title,dnsCACHE,ip_macdict,mac_ipdict)
+		dnsCACHE = doLayer(layer,packets,args.outpath,args,gM)
 	return(dnsCACHE)
 
 def readHostsFile(hostfile,dnsCACHE):

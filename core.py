@@ -182,24 +182,13 @@ class parDNS():
 
 class GraphManager(object):
 	""" Generates and processes the graph based on packets
+	reusable version
 	"""
 
-	def __init__(self, packets=[], layer=3, args={}, dnsCACHE={},ip_macdict={},mac_ipdict={}):
-		assert layer in [2,3,4],'###GraphManager __init__ got layer = %s. Must be 2,3 or 4' % str(layer)
-		assert len(packets) > 0, '###GraphManager __init__ got empty packets list - nothing useful can be done'
-		self.graph = DiGraph()
-		self.agraph = None
-		self.layer = layer
-		self.geo_ip = None
-		self.geo_lang = args.geolang
+	def __init__(self,args, dnsCACHE,ip_macdict,mac_ipdict,title):
+		""" reset as needed once created
+		"""
 		self.args = args
-		self.data = {}
-		self.ip_macdict = ip_macdict
-		self.mac_ipdict = mac_ipdict
-		self.dnsCACHE = dnsCACHE
-		self.squishPorts = args.squishportsOFF == False
-		self.parallelDNS = args.paralleldnsOFF == False
-		self.title = 'Title goes here'
 		privatestarts = ['10.','192.168.','255.255.255.255','0.0.0.0']
 		more = ["172.%d" % i for i in range(16,32)]
 		privatestarts += more
@@ -211,6 +200,31 @@ class GraphManager(object):
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
 		except:
 			logging.warning("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
+		self.graph = DiGraph()
+		self.agraph = None
+		self.geo_ip = None
+		self.geo_lang = args.geolang
+		self.args = args
+		self.title = title
+		self.data = {}
+		self.ip_macdict = ip_macdict
+		self.mac_ipdict = mac_ipdict
+		self.dnsCACHE = dnsCACHE
+		self.squishPorts = args.squishportsOFF == False
+		self.parallelDNS = args.paralleldnsOFF == False
+
+		
+	
+	def reset(self, packets, layer):
+		del self.graph
+		del self.data
+		del self.agraph
+		self.agraph=None
+		self.data = {}
+		self.graph = DiGraph() # make a new one
+		assert layer in [2,3,4],'###GraphManager __init__ got layer = %s. Must be 2,3 or 4' % str(layer)
+		assert len(packets) > 0, '###GraphManager __init__ got empty packets list - nothing useful can be done'
+		self.layer = layer		
 		if self.args.restrict:
 			packetsr = [x for x in packets if ((x[0].src in self.args.restrict) or (x[0].dst in self.args.restrict))]
 			if len(packetsr) == 0:
@@ -515,14 +529,14 @@ class GraphManager(object):
 	def wordClouds(self,outfname,protoc):
 		ipfq = {}
 		graph = self.agraph # assume already drawn
-		for node in self.graph.nodes():
-			dnrec = self.dnsCACHE.get(node,None)
-			if dnrec:
-				ipfq[dnrec['ip']] = dnrec['fqdname']
+		# for node in self.graph.nodes():
+			# dnrec = self.dnsCACHE.get(node,None)
+			# if dnrec:
+				# ipfq[dnrec['ip']] = dnrec['fqdname']
 		totalbytes = 0
 		weights = {}
 		for edge in graph.edges():
-			src = ipfq.get(edge[0],edge[0])
+			src = self.dnsCACHE.get(edge[0],edge[0])
 			weights[src] = {}
 			for dest in self.graph[edge[0]].keys():
 				cnx = self.graph[edge[0]][dest]
@@ -540,12 +554,16 @@ class GraphManager(object):
 				ip = ssnode[0]
 			else:
 				ip = snode
-			fqname = ipfq.get(ip,ip)
+			dnrec = self.dnsCACHE.get(ip,None)
+			if dnrec:
+				fqname = dnrec['fqdname']
+				whoname = dnrec['whoname']
+				
 			wts = weights.get(fqname,None)
 			if wts and len(wts.keys()) > 1:
 				nn = len(wts.keys())
 				destfqlist = wts.keys()
-				wc = WordCloud(background_color="white",width=1200, height=1000,max_words=200,
+				wc = WordCloud(background_color="black",width=1200, height=1000,max_words=200,
 				 min_font_size=20, color_func = self.random_color_func).generate_from_frequencies(wts)
 				f = plt.figure(figsize=(10, 10))
 				plt.imshow(wc, interpolation='bilinear')
@@ -555,7 +573,6 @@ class GraphManager(object):
 				ofss = outfname.split('destwordcloud') # better be there
 				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
 				f.savefig(ofn, bbox_inches='tight')
-				plt.clf() 
-				del f
+				plt.close(f) 
 
 
