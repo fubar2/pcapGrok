@@ -529,46 +529,51 @@ class GraphManager(object):
 	def wordClouds(self,outfname,protoc):
 		ipfq = {}
 		graph = self.agraph # assume already drawn
-		# for node in self.graph.nodes():
-			# dnrec = self.dnsCACHE.get(node,None)
-			# if dnrec:
-				# ipfq[dnrec['ip']] = dnrec['fqdname']
+		for node in self.graph.nodes():
+			dnrec = self.dnsCACHE.get(node,None)
+			if dnrec:
+				ipfq[node] = dnrec['fqdname']
+			else:
+				ipfq[node] = node
 		totalbytes = 0
 		weights = {}
 		for edge in graph.edges():
-			src = self.dnsCACHE.get(edge[0],edge[0])
-			weights[src] = {}
+			src = edge[0]
+			srck = ipfq.get(src,src)
+			weights[srck] = {}
 			for dest in self.graph[edge[0]].keys():
+				destk = ipfq.get(dest,dest)
 				cnx = self.graph[edge[0]][dest]
 				tb = cnx['transmitted']
 				totalbytes += tb
-				destfq = ipfq.get(dest,dest)
-				if weights[src].get(destfq,None):
-					weights[src][destfq] += tb
+				if weights[srck].get(destk,None):
+					weights[srck][destk] += tb
 				else:
-					weights[src][destfq] = tb
+					weights[srck][destk] = tb
 		for node in graph.nodes():
 			snode = str(node)
-			ssnode = snode.split(':') # look for mac or a port on the ip
-			if len(ssnode) <= 2:
-				ip = ssnode[0]
-			else:
-				ip = snode
-			dnrec = self.dnsCACHE.get(ip,None)
+			dnrec = self.dnsCACHE.get(snode,None)
 			if dnrec:
 				fqname = dnrec['fqdname']
 				whoname = dnrec['whoname']
-				
+				city = dnrec['city']
+				country = dnrec['country']
+			else:
+				fqname = node
+				whoname = ''
+				city = ''
+				country = ''
 			wts = weights.get(fqname,None)
 			if wts and len(wts.keys()) > 1:
 				nn = len(wts.keys())
 				destfqlist = wts.keys()
+				longname = ' '.join([x for x in (node,fqname,whoname,city,country) if x > ''])
 				wc = WordCloud(background_color="black",width=1200, height=1000,max_words=200,
 				 min_font_size=20, color_func = self.random_color_func).generate_from_frequencies(wts)
 				f = plt.figure(figsize=(10, 10))
 				plt.imshow(wc, interpolation='bilinear')
 				plt.axis('off')
-				plt.title('%s %s destinations word cloud' % (fqname,protoc), color="blue")
+				plt.title('%s %s destinations word cloud' % (longname,protoc), color="blue")
 				# plt.show()
 				ofss = outfname.split('destwordcloud') # better be there
 				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
