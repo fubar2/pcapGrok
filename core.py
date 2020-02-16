@@ -573,7 +573,7 @@ class GraphManager(object):
 				f = plt.figure(figsize=(10, 10))
 				plt.imshow(wc, interpolation='bilinear')
 				plt.axis('off')
-				plt.title('%s %s destinations word cloud' % (longname,protoc), color="blue")
+				plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
 				# plt.show()
 				ofss = outfname.split('destwordcloud') # better be there
 				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
