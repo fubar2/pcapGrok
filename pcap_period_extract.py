@@ -96,8 +96,8 @@ class pcapStore():
 		for fnum in range(firstfi, lastfi):
 			rdfname = self.pcapfnames[fnum]
 			try:
-			   lsout=Popen(['lsof -t',rdfname],stdout=PIPE, shell=False)
-			   if lsout > "":
+				lsout=Popen(['lsof -t',rdfname],stdout=PIPE, shell=False)
+				if lsout > "":
 					logging.debug('file %s in use so not read' % rdfname)
 			except:
 				pin = rdpcap(rdfname)
