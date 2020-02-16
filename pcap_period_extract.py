@@ -43,7 +43,7 @@ class pcapStore():
 			s = str(ppath) + 'is not a valid pcap file'
 			logging.debug(s)
 		
-		return ok
+		return ok 
 		
 		
 	def readFolder(self):
