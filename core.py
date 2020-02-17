@@ -88,6 +88,7 @@ class parDNS():
 		self.ip_macdict = ip_macdict
 		self.geo_ip = geo_ip
 		self.geo_lang = geo_lang
+		self.glabel = glabel
 		
 	def lookup(self,ip):
 			ddict = copy.copy(self.drec)
@@ -185,7 +186,7 @@ class GraphManager(object):
 	reusable version
 	"""
 
-	def __init__(self,args, dnsCACHE,ip_macdict,mac_ipdict,title):
+	def __init__(self,args, dnsCACHE,ip_macdict,mac_ipdict,glabel,filesused):
 		""" reset as needed once created
 		"""
 		self.args = args
@@ -205,7 +206,8 @@ class GraphManager(object):
 		self.geo_ip = None
 		self.geo_lang = args.geolang
 		self.args = args
-		self.title = title
+		self.filesused = filesused
+		self.glabel = glabel
 		self.data = {}
 		self.ip_macdict = ip_macdict
 		self.mac_ipdict = mac_ipdict
@@ -215,11 +217,12 @@ class GraphManager(object):
 
 		
 	
-	def reset(self, packets, layer):
+	def reset(self, packets, layer,gtitle):
 		del self.graph
 		del self.data
 		del self.agraph
 		self.agraph=None
+		self.gtitle = gtitle
 		self.data = {}
 		self.graph = DiGraph() # make a new one
 		assert layer in [2,3,4],'###GraphManager __init__ got layer = %s. Must be 2,3 or 4' % str(layer)
@@ -445,12 +448,12 @@ class GraphManager(object):
 				dp = 'malformed'
 			return "%s:%s" % (src, sp), "%s:%s" % (dst, dp), packet
 
-	def draw(self, filename=None):
+	def draw(self, filename):
 		graph = self.get_graphviz_format()
-		graph.graph_attr['label'] = self.title
+		graph.graph_attr['label'] = self.glabel
 		graph.graph_attr['labelloc'] = 't'
-		graph.graph_attr['fontsize'] = 20
-		graph.graph_attr['fontcolor'] = 'blue'
+		graph.graph_attr['fontsize'] = 35
+		graph.graph_attr['fontcolor'] = 'indigo'
 		graph.graph_attr['size'] = "1000,1000"
 		graph.graph_attr['resolution'] = 72
 		graph.graph_attr['bgcolor'] = "#FFFFFFFF"

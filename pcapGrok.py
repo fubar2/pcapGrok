@@ -25,7 +25,7 @@ IPBROADCAST = '0.0.0.0'
 MACBROADCAST = 'ff:ff:ff:ff:ff:ff'
 PRIVATE = 'Local'
 SEPCHAR = ','
-
+NAMEDLAYERS = ['Ether','IP','Proto']
 ip_macdict = {}
 mac_ipdict = {}
 
@@ -69,13 +69,14 @@ def doLayer(layer, packets,fname,args, gM):
 	run a single layer analysis
 	"""
 	args.nmax = int(args.nmax)
-	gM.reset(packets,layer)
+	glabel = gM.glabel
+	gM.reset(packets,layer,glabel)
 	nn = len(gM.graph.nodes())
 	if nn < 1:
 		logging.debug('Got zero nodes from file %s layer %d- nothing to draw' % (fname,layer))
 		return copy.copy(gM.dnsCACHE)
 	if args.pictures:
-		title = gM.title
+		title = gM.filesused
 		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
@@ -95,24 +96,24 @@ def doLayer(layer, packets,fname,args, gM):
 			for kind in llook.keys():
 				subset = [x for x in packets if x != None and x.haslayer(kind)]  
 				if len(subset) > 0:
-					gM.reset(subset,layer)
+					gM.reset(subset,layer,glabel)
 					nn = len(gM.graph.nodes())
 					if nn > 1:
-						ofn = '%s_layer%d_%s_%s' % (kind,layer,title.replace('+','_'),args.pictures)
+						pofn = '%s_layer%d_%s_%s' % (kind,layer,title,args.pictures)
 						if args.outpath:
-							ofn = os.path.join(args.outpath,ofn)
-						gM.title = '%s Only, Layer %d using packets from %s' % (kind,layer,title)
+							pofn = os.path.join(args.outpath,pofn)
+						gM.glabel = '%s Only, Layer %d using packets from %s' % (kind,layer,gM.filesused)
 						gM.draw(filename = ofn)
-						logging.debug('drew %s %d nodes' % (ofn,nn))
+						logging.debug('drew %s %d nodes' % (pofn,nn))
 						if layer == 3 and not args.wordcloudsOFF:
 							if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
 								pathlib.Path(os.path.join(args.outpath,'wordclouds')).mkdir(parents=True, exist_ok=True)
-							ofn = '%s_destwordcloud_layer%d_%s_%s' % (kind,layer,title.replace('+','_'),args.pictures)
+							pofn = '%s_destwordcloud_%d_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
 							if args.outpath:
-								ofn = os.path.join(args.outpath,'wordclouds',ofn)
-							gM.wordClouds(ofn,kind)
+								pofn = os.path.join(args.outpath,'wordclouds',pofn)
+							gM.wordClouds(pofn,kind)
 							logging.debug('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,ofn))
-							print('layer 3 - did wordclouds to',ofn)
+							print('layer 3 - did wordclouds to',pofn)
 					else:
 						logging.debug('found %d nodes so not a very worthwhile graph' % nn)
 	if args.frequent_in:
@@ -143,7 +144,7 @@ def checkmacs(packets):
 	return(ip_macdict,mac_ipdict)
 
 
-def doPcap(pin,args,title,dnsCACHE):
+def doPcap(pin,args,filesused,dnsCACHE,gM):
 	"""
 	filtering and control for analysis - amalgamated input or not 
 	runs all layers if no layer specified
@@ -166,10 +167,12 @@ def doPcap(pin,args,title,dnsCACHE):
 		logging.debug('### Read %d packets. After applying supplied filters %d packets are left. wl=%s bl= %s' % (len(pin),len(packets),wl,bl))
 	ip_macdict,mac_ipdict = checkmacs(packets)
 	logging.info('$$$$ mac_ipdict = %s' % mac_ipdict)
-	gM = GraphManager(args, dnsCACHE,ip_macdict,mac_ipdict,title)
-	# big change! there is only one gM - it gets reset between layers and protocols now to save ram
+	gM.ip_macdict = ip_macdict
+	gM.mac_ipdict = mac_ipdict
+
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
-		for layer in [2,3,4]:
+		for i,layer in enumerate([2,3,4]):
+			gM.glabel = '%s layer network traffic in %s' % (NAMEDLAYERS[i],filesused)
 			dnsCACHE = doLayer(layer, packets,args.pictures,args, gM)
 	else:
 		layer = 3
@@ -177,8 +180,9 @@ def doPcap(pin,args,title,dnsCACHE):
 			layer = 2
 		elif args.layer4:
 			layer = 4
+		gM.glabel = '%s layer network traffic in %s' % (NAMEDLAYERS[layer],filesused)
 		dnsCACHE = doLayer(layer,packets,args.outpath,args,gM)
-	return(dnsCACHE)
+	return dnsCACHE,gM
 
 def readHostsFile(hostfile,dnsCACHE):
 	din = csv.reader(open(args.hostsfile,'r'),delimiter=SEPCHAR)
@@ -270,165 +274,165 @@ def readDnsCache(dnsCACHEfile,dnsCACHE):
 			logging.debug('### wrote new dnsCACHE entry k=%s contents=%s from existing cache' % (k,rest))
 	return dnsCACHE
 
-def doTshark(title,pcapf):
+def doTshark(gtitle,pcapf):
 	"""grab and process - sample part - fugly - some have table headers
-	cl = "tshark -q -z hosts -z dns,tree -z bootp,stat -z conv,tcp -z conv,udp -z conv,ip -z endpoints,udp -z io,phs -r %s" % (infname)	
+	cl = "tshark -q -z hosts -z dns,tree -z bootp,stat -z conv,tcp -z conv,udp -z conv,ip -z endpoints,udp -z io,phs -r %s" % (infname) 
 	tshark: Invalid -z argument "credentials"; it must be one of:
-     afp,srt
-     ancp,tree
-     ansi_a,bsmap
-     ansi_a,dtap
-     ansi_map
-     bacapp_instanceid,tree
-     bacapp_ip,tree
-     bacapp_objectid,tree
-     bacapp_service,tree
-     camel,counter
-     camel,srt
-     collectd,tree
-     conv,bluetooth
-     conv,eth
-     conv,fc
-     conv,fddi
-     conv,ip
-     conv,ipv6
-     conv,ipx
-     conv,jxta
-     conv,mptcp
-     conv,ncp
-     conv,rsvp
-     conv,sctp
-     conv,sll
-     conv,tcp
-     conv,tr
-     conv,udp
-     conv,usb
-     conv,wlan
-     dcerpc,srt
-     dests,tree
-     dhcp,stat
-     diameter,avp
-     diameter,srt
-     dns,tree
-     endpoints,bluetooth
-     endpoints,eth
-     endpoints,fc
-     endpoints,fddi
-     endpoints,ip
-     endpoints,ipv6
-     endpoints,ipx
-     endpoints,jxta
-     endpoints,mptcp
-     endpoints,ncp
-     endpoints,rsvp
-     endpoints,sctp
-     endpoints,sll
-     endpoints,tcp
-     endpoints,tr
-     endpoints,udp
-     endpoints,usb
-     endpoints,wlan
-     expert
-     f5_tmm_dist,tree
-     f5_virt_dist,tree
-     fc,srt
-     flow,any
-     flow,icmp
-     flow,icmpv6
-     flow,lbm_uim
-     flow,tcp
-     follow,http
-     follow,tcp
-     follow,tls
-     follow,udp
-     gsm_a
-     gsm_a,bssmap
-     gsm_a,dtap_cc
-     gsm_a,dtap_gmm
-     gsm_a,dtap_mm
-     gsm_a,dtap_rr
-     gsm_a,dtap_sacch
-     gsm_a,dtap_sm
-     gsm_a,dtap_sms
-     gsm_a,dtap_ss
-     gsm_a,dtap_tp
-     gsm_map,operation
-     gtp,srt
-     h225,counter
-     h225_ras,rtd
-     hart_ip,tree
-     hosts
-     hpfeeds,tree
-     http,stat
-     http,tree
-     http2,tree
-     http_req,tree
-     http_seq,tree
-     http_srv,tree
-     icmp,srt
-     icmpv6,srt
-     io,phs
-     io,stat
-     ip_hosts,tree
-     ip_srcdst,tree
-     ipv6_dests,tree
-     ipv6_hosts,tree
-     ipv6_ptype,tree
-     ipv6_srcdst,tree
-     isup_msg,tree
-     lbmr_queue_ads_queue,tree
-     lbmr_queue_ads_source,tree
-     lbmr_queue_queries_queue,tree
-     lbmr_queue_queries_receiver,tree
-     lbmr_topic_ads_source,tree
-     lbmr_topic_ads_topic,tree
-     lbmr_topic_ads_transport,tree
-     lbmr_topic_queries_pattern,tree
-     lbmr_topic_queries_pattern_receiver,tree
-     lbmr_topic_queries_receiver,tree
-     lbmr_topic_queries_topic,tree
-     ldap,srt
-     mac-lte,stat
-     megaco,rtd
-     mgcp,rtd
-     mtp3,msus
-     ncp,srt
-     osmux,tree
-     plen,tree
-     proto,colinfo
-     ptype,tree
-     radius,rtd
-     rlc-lte,stat
-     rpc,programs
-     rpc,srt
-     rtp,streams
-     rtsp,stat
-     rtsp,tree
-     sametime,tree
-     scsi,srt
-     sctp,stat
-     sip,stat
-     smb,sids
-     smb,srt
-     smb2,srt
-     smpp_commands,tree
-     sv
-     ucp_messages,tree
-     wsp,stat
+	 afp,srt
+	 ancp,tree
+	 ansi_a,bsmap
+	 ansi_a,dtap
+	 ansi_map
+	 bacapp_instanceid,tree
+	 bacapp_ip,tree
+	 bacapp_objectid,tree
+	 bacapp_service,tree
+	 camel,counter
+	 camel,srt
+	 collectd,tree
+	 conv,bluetooth
+	 conv,eth
+	 conv,fc
+	 conv,fddi
+	 conv,ip
+	 conv,ipv6
+	 conv,ipx
+	 conv,jxta
+	 conv,mptcp
+	 conv,ncp
+	 conv,rsvp
+	 conv,sctp
+	 conv,sll
+	 conv,tcp
+	 conv,tr
+	 conv,udp
+	 conv,usb
+	 conv,wlan
+	 dcerpc,srt
+	 dests,tree
+	 dhcp,stat
+	 diameter,avp
+	 diameter,srt
+	 dns,tree
+	 endpoints,bluetooth
+	 endpoints,eth
+	 endpoints,fc
+	 endpoints,fddi
+	 endpoints,ip
+	 endpoints,ipv6
+	 endpoints,ipx
+	 endpoints,jxta
+	 endpoints,mptcp
+	 endpoints,ncp
+	 endpoints,rsvp
+	 endpoints,sctp
+	 endpoints,sll
+	 endpoints,tcp
+	 endpoints,tr
+	 endpoints,udp
+	 endpoints,usb
+	 endpoints,wlan
+	 expert
+	 f5_tmm_dist,tree
+	 f5_virt_dist,tree
+	 fc,srt
+	 flow,any
+	 flow,icmp
+	 flow,icmpv6
+	 flow,lbm_uim
+	 flow,tcp
+	 follow,http
+	 follow,tcp
+	 follow,tls
+	 follow,udp
+	 gsm_a
+	 gsm_a,bssmap
+	 gsm_a,dtap_cc
+	 gsm_a,dtap_gmm
+	 gsm_a,dtap_mm
+	 gsm_a,dtap_rr
+	 gsm_a,dtap_sacch
+	 gsm_a,dtap_sm
+	 gsm_a,dtap_sms
+	 gsm_a,dtap_ss
+	 gsm_a,dtap_tp
+	 gsm_map,operation
+	 gtp,srt
+	 h225,counter
+	 h225_ras,rtd
+	 hart_ip,tree
+	 hosts
+	 hpfeeds,tree
+	 http,stat
+	 http,tree
+	 http2,tree
+	 http_req,tree
+	 http_seq,tree
+	 http_srv,tree
+	 icmp,srt
+	 icmpv6,srt
+	 io,phs
+	 io,stat
+	 ip_hosts,tree
+	 ip_srcdst,tree
+	 ipv6_dests,tree
+	 ipv6_hosts,tree
+	 ipv6_ptype,tree
+	 ipv6_srcdst,tree
+	 isup_msg,tree
+	 lbmr_queue_ads_queue,tree
+	 lbmr_queue_ads_source,tree
+	 lbmr_queue_queries_queue,tree
+	 lbmr_queue_queries_receiver,tree
+	 lbmr_topic_ads_source,tree
+	 lbmr_topic_ads_topic,tree
+	 lbmr_topic_ads_transport,tree
+	 lbmr_topic_queries_pattern,tree
+	 lbmr_topic_queries_pattern_receiver,tree
+	 lbmr_topic_queries_receiver,tree
+	 lbmr_topic_queries_topic,tree
+	 ldap,srt
+	 mac-lte,stat
+	 megaco,rtd
+	 mgcp,rtd
+	 mtp3,msus
+	 ncp,srt
+	 osmux,tree
+	 plen,tree
+	 proto,colinfo
+	 ptype,tree
+	 radius,rtd
+	 rlc-lte,stat
+	 rpc,programs
+	 rpc,srt
+	 rtp,streams
+	 rtsp,stat
+	 rtsp,tree
+	 sametime,tree
+	 scsi,srt
+	 sctp,stat
+	 sip,stat
+	 smb,sids
+	 smb,srt
+	 smb2,srt
+	 smpp_commands,tree
+	 sv
+	 ucp_messages,tree
+	 wsp,stat
 
 	,'tshark --export-objects "http,%s"' % args.outpath
 	"""
 	rclist = " ".join(["-z hosts","-z dns,tree", "-z dhcp,stat", "-z conv,tcp", "-z conv,udp", "-z conv,ip", "-z endpoints,udp", \
 	   "-z io,phs","-z http,tree"])
   
-	ofn = "tshark_%s.log" % (title)
+	ofn = "tshark_%s.log" % (gtitle.replace(' ','_'))
 	ofn = os.path.join(args.outpath,ofn)
 	cl = "tshark -q %s -r %s > %s" % (rclist,pcapf,ofn)
 	os.system(cl)
 	
 	outsub = os.path.join(args.outpath,'tsharkfiles')
 	os.makedirs(outsub, exist_ok=True)
-	ofn = "tshark_%s_%s.log" % ('Files',title)
+	ofn = "tshark_%s_%s.log" % ('Files',gtitle)
 	cl = 'tshark -r %s --export-objects "http,tftp,smb,imf,dicom,%s" > %s' % (pcapf,outsub,ofn)
 	
 	os.system(cl)
@@ -451,7 +455,7 @@ if __name__ == '__main__':
 	# datetime object containing current date and time
 	now = datetime.now()
 	dt = now.strftime("%d/%m/%Y %H:%M:%S")
-	infiles = [x for x in args.pcaps if os.path.isfile(x)]	
+	infiles = [x for x in args.pcaps if os.path.isfile(x)]  
 	realfiles = [x for x in infiles if isScapypcap(x)]
 	if len(realfiles) > 0:
 		if args.outpath:
@@ -459,7 +463,6 @@ if __name__ == '__main__':
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
 			logging.basicConfig(filename=os.path.join(args.outpath,logFileName),level=logging.DEBUG,filemode='w')
 			logging.debug('pcapGrok starting at %s' % dt)
-			logging.debug('Made %s for output' % args.outpath)
 		else:
 			logging.basicConfig(filename=logFileName,level=logging.DEBUG,filemode='w')
 			logging.debug('pcapGrok starting at %s' % dt)
@@ -470,7 +473,7 @@ if __name__ == '__main__':
 					if row.startswith('#'):
 						continue
 					rowl = row.rstrip().split('\t')
-					#fields	DHCP_hash	DHCP_FP	FingerBank_Device_name	Score
+					#fields DHCP_hash   DHCP_FP FingerBank_Device_name  Score
 					dhcphash,devname,score = rowl
 					kydknown[dhcphash] = [devname,score]
 		dnsCACHE = {}
@@ -491,27 +494,32 @@ if __name__ == '__main__':
 			r = args.restrict
 			rl = [x.lower() for x in r]
 			args.restrict = rl
+		gM = GraphManager(args, dnsCACHE,{},{},'','')
 		if args.append: # old style amalgamated input
+			filesused = '_'.join([os.path.basename(x).split('.')[0] for x in realfiles])
+			if len(filesused) > 50:
+				filesused = '%s_etc' % filesused[:50]
+			title = filesused
+			gM.filesused = filesused
 			rpin = ScapySource.load(realfiles)
 			pin = [x for x in rpin if x.haslayer(Ether)]
 			diff = len(rpin) - len(pin)
 			if abs(diff) > 0:
 				logging.debug('##### Found %d packets without an ethernet layer in %s' % (diff,realfiles))
-			title = '+'.join([os.path.basename(x) for x in realfiles])
-			if len(title) > 50:
-				title = title[:50] + '_etc'
 			if False and args.kyddbpath:
 				kydres = kyd(fname)
 				logging.debug('Got kyd results %s' % kydres)
-			dnsCACHE = doPcap(pin,args,title,dnsCACHE)
+			dnsCACHE,gM = doPcap(pin,args,title,dnsCACHE,gM)
 			if args.tsharkON:
-				doTshark(title,fname)
+				doTshark(filesused,fname)
 		else:
 			for fname in realfiles:
 				if False and args.kyddbpath:
 					kydres = kyd(fname)
 					logging.info('Got kyd results %s' % kydres)
 				try:
+					gM.filesused = os.path.basename(fname).split('.')[0]
+					title = gM.filesused
 					rpin = rdpcap(fname)
 					pin = [x for x in rpin if x.haslayer(Ether)]
 					diff = len(rpin) - len(pin)
@@ -520,13 +528,13 @@ if __name__ == '__main__':
 				except:
 					logging.debug('%s is not a valid scapy pcap file' % fname)
 					continue
-				title = os.path.basename(fname)
+				title = gM.filesused
 				logging.debug("Processing %s. Title is %s" % (fname,title))
-				dnsCACHE = doPcap(pin,args,title,dnsCACHE)
+				dnsCACHE,gM = doPcap(pin,args,title,dnsCACHE,gM)
 				if args.tsharkON:
 					doTshark(title,fname)
 				
-		header = ['ip','fqdname','city','country','whoname','mac']	
+		header = ['ip','fqdname','city','country','whoname','mac']  
 		with open(dnsCACHEfile,'w') as cached:
 			writer = csv.DictWriter(cached,delimiter=SEPCHAR,fieldnames = header)
 			writer.writeheader()
