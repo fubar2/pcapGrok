@@ -126,8 +126,8 @@ if __name__ == "__main__": # testing testbed_2020-02-03-18:42:00.pcap
 	parser.add_argument('-s', '--startdate', help='Start date/time - must be something like 2020-02-03-18:30:00 for example',required=True)
 	parser.add_argument('-e', '--enddate', help='End date/time - must be something like 2020-02-03-19:00:00 for example',required=True)
 	args = parser.parse_args()
-	assert os.path_isdir(args.pcappath),'Path to pcaps %s not a valid path' % args.pcappath
-	assert os.path_isdir(args.pcappath),'Path to pcaps %s not a valid path' % args.pcappath
+	assert os.path.isdir(args.pcappath),'Path to pcaps %s not a valid path' % args.pcappath
+	assert os.path.isdir(args.pcappath),'Path to pcaps %s not a valid path' % args.pcappath
 	assert datetime.strptime(args.startdate, FSDTFORMAT),'Supplied start date %s does not parse with %s' % (args.startdate, FSDTFORMAT)
 	assert datetime.strptime(args.enddate, FSDTFORMAT),'Supplied end %s does not parse with %s' % (args.enddate, FSDTFORMAT)
 	outdir = os.path.dirname(args.outpath)
