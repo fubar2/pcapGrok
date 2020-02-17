@@ -88,7 +88,7 @@ class parDNS():
 		self.ip_macdict = ip_macdict
 		self.geo_ip = geo_ip
 		self.geo_lang = geo_lang
-		self.glabel = glabel
+
 		
 	def lookup(self,ip):
 			ddict = copy.copy(self.drec)
