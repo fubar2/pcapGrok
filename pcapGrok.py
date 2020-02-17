@@ -428,7 +428,7 @@ def doTshark(title,pcapf):
 	outsub = os.path.join(args.outpath,'tsharkfiles')
 	os.makedirs(outsub, exist_ok=True)
 	ofn = "tshark_%s_%s.log" % ('Files',title)
-	cl = 'tshark -r %s --export-objects "http,%s" > %s' % (pcapf,outsub,ofn)
+	cl = 'tshark -r %s --export-objects "http,tftp,smb,imf,dicom,%s" > %s' % (pcapf,outsub,ofn)
 	
 	os.system(cl)
 

@@ -539,7 +539,6 @@ class GraphManager(object):
 					ipfq[node] = node
 			else:
 				ipfq[node] = node
-		print('ipfq',ipfq)
 		totalbytes = 0
 		weights = {}
 		for edge in graph.edges():
@@ -555,7 +554,6 @@ class GraphManager(object):
 					weights[srck][destk] += tb
 				else:
 					weights[srck][destk] = tb
-		print('wts',weights)
 		for node in graph.nodes():
 			snode = str(node)
 			dnrec = self.dnsCACHE.get(snode,None)
@@ -570,7 +568,6 @@ class GraphManager(object):
 				city = ''
 				country = ''
 			wts = weights.get(fqname,None)
-			#print('wts for',fqname,wts)
 			if wts and len(wts.keys()) > 1:
 				nn = len(wts.keys())
 				destfqlist = wts.keys()
