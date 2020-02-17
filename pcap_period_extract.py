@@ -99,22 +99,24 @@ class pcapStore():
 		for fnum in range(firstfi, lastfi):
 			rdfname = self.pcapfnames[fnum]
 			try:
-				lsout=Popen(['lsof -t',rdfname],stdout=PIPE, shell=False)
+				lsout=Popen(['lsof', '-t',rdfname],stdout=PIPE, shell=False)
 				if lsout > "":
 					logging.debug('file %s in use so not read' % rdfname)
 			except:
 				pin = rdpcap(rdfname)
-				mint = min([x.time for x in pin])
-				maxt = max([x.time for x in pin])
-				print('file',rdfname,'has min',mint,'max',maxt)
-				pin = [x for x in pin if int(x.time) >= sdtt and int(x.time) <= edtt] # gotta love scapy 
-				if len(pin) > 0:
-					npkt += len(pin)
-					wrpcap(pcapdest, pin, append=True) #appends packets to output file
-					acted = True
-					logging.info('wrote %d packets to %s' % (len(pin),pcapdest))
-				else:
-					logging.debug('writePeriod got zero packets filtering by start %s end %s on pcap %s ' % (sdtt,edtt,rdfname))
+				if (len(pin) > 0):
+					mint = min([x.time for x in pin])
+					maxt = max([x.time for x in pin])
+					print('file',rdfname,'has min',mint,'max',maxt)
+					pin = [x for x in pin if int(x.time) >= sdtt and int(x.time) <= edtt] # gotta love scapy 
+					if len(pin) > 0:
+						npkt += len(pin)
+						wrpcap(pcapdest, pin, append=True) #appends packets to output file
+						acted = True
+						logging.info('wrote %d packets to %s' % (len(pin),pcapdest))
+					else:
+						logging.debug('writePeriod got zero packets filtering by start %s end %s on pcap %s ' % (sdtt,edtt,rdfname))
+				logging.debug('writePeriod got an empty pcap file at path %s - this happens...' % rdfname)
 		logging.info('writePeriod filtered %d packets from %d packet files using window %s - %s to %s' % (npkt,lastfi-firstfi+1,startdt,enddt,pcapdest))
 		return acted
 		
