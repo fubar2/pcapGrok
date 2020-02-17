@@ -73,7 +73,7 @@ class pcapStore():
 						except:
 							logging.warning('Found pcap file name %s in path %s - expected %s preceded by an underscore - ignoring' % (pfn,self.pcapsFolder,FSDTFORMAT))
 					else:
-						logging.warning('File name %s in path %s is NOT a valid pcap file - ignoring' % (pfn,self.pcapsFolder,FSDTFORMAT))
+						logging.warning('File name %s in path %s is NOT a valid pcap file with _%s - ignoring' % (pfn,self.pcapsFolder,FSDTFORMAT))
 		pcapinfo.sort() # files might turn up in any old order in complex archives
 		self.pcapfnames = [x[1] for x in pcapinfo]
 		self.pcaptds = [x[0] for x in pcapinfo]
