@@ -104,7 +104,7 @@ def doLayer(layer, packets,fname,args, gM):
 						if args.outpath:
 							pofn = os.path.join(args.outpath,pofn)
 						gM.glabel = '%s only, %s layer, using packets from %s' % (kind,NAMEDLAYERS[layer],gM.filesused)
-						gM.draw(filename = ofn)
+						gM.draw(filename = pofn)
 						logging.debug('drew %s %d nodes' % (pofn,nn))
 						if layer == 3 and not args.wordcloudsOFF:
 							if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
