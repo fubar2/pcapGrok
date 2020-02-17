@@ -25,7 +25,7 @@ IPBROADCAST = '0.0.0.0'
 MACBROADCAST = 'ff:ff:ff:ff:ff:ff'
 PRIVATE = 'Local'
 SEPCHAR = ','
-NAMEDLAYERS = ['Ether','IP','Proto']
+NAMEDLAYERS = ['bogus','bugusser','Ether','IP','Proto']
 ip_macdict = {}
 mac_ipdict = {}
 
@@ -77,6 +77,7 @@ def doLayer(layer, packets,fname,args, gM):
 		return copy.copy(gM.dnsCACHE)
 	if args.pictures:
 		title = gM.filesused
+		gM.glabel = 'Layer %s using packets from %s' % (NAMEDLAYERS[layer],gM.filesused)
 		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
@@ -102,7 +103,7 @@ def doLayer(layer, packets,fname,args, gM):
 						pofn = '%s_layer%d_%s_%s' % (kind,layer,title,args.pictures)
 						if args.outpath:
 							pofn = os.path.join(args.outpath,pofn)
-						gM.glabel = '%s Only, Layer %d using packets from %s' % (kind,layer,gM.filesused)
+						gM.glabel = '%s only, %s layer, using packets from %s' % (kind,NAMEDLAYERS[layer],gM.filesused)
 						gM.draw(filename = ofn)
 						logging.debug('drew %s %d nodes' % (pofn,nn))
 						if layer == 3 and not args.wordcloudsOFF:
