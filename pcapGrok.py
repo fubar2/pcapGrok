@@ -434,10 +434,14 @@ def doTshark(gtitle,pcapf):
 	outsub = os.path.join(args.outpath,'tsharkfiles')
 	os.makedirs(outsub, exist_ok=True)
 	ofn = "tshark_%s_%s.log" % ('Files',gtitle)
-	cl = 'tshark -r %s --export-objects "http,tftp,smb,imf,dicom,%s" > %s' % (pcapf,outsub,ofn)
-	
+	cl = 'tshark -r %s --export-objects "http,%s" > %s' % (pcapf,outsub,ofn)	
 	os.system(cl)
-
+	cl = 'tshark -r %s --export-objects "tftp,%s" > %s' % (pcapf,outsub,ofn)	
+	os.system(cl)
+	cl = 'tshark -r %s --export-objects "smb,%s" > %s' % (pcapf,outsub,ofn)	
+	os.system(cl)
+	
+	
 def isScapypcap(ppath):
 	"""test path to see if can be read
 	"""
