@@ -167,6 +167,7 @@ def doPcap(pin,args,title,dnsCACHE):
 	ip_macdict,mac_ipdict = checkmacs(packets)
 	logging.info('$$$$ mac_ipdict = %s' % mac_ipdict)
 	gM = GraphManager(args, dnsCACHE,ip_macdict,mac_ipdict,title)
+	# big change! there is only one gM - it gets reset between layers and protocols now to save ram
 	if not (args.layer2 or args.layer3 or args.layer4): # none requested - do all
 		for layer in [2,3,4]:
 			dnsCACHE = doLayer(layer, packets,args.pictures,args, gM)
