@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # extract all packets within a time window as a pcap file from a folder of rotated pcap logs 
 # ross lazarus
 # FSDTFORMAT should correspond to the suffix of the filename made by tcpdump
@@ -8,6 +10,7 @@
 # images will cause the obvious consequences. 
 
 import os
+import sys
 from datetime import datetime
 from time import localtime,time
 import dateutil
@@ -16,7 +19,7 @@ import bisect
 import pathlib
 import logging
 from subprocess import check_output,Popen, PIPE
-
+from argparse import ArgumentParser
 logFileName = 'pcap_period_extract.log'
 logging.basicConfig(filename=logFileName,filemode='w')
 FSDTFORMAT = '%Y-%m-%d-%H:%M:%S'
@@ -116,8 +119,24 @@ class pcapStore():
 		return acted
 		
 if __name__ == "__main__": # testing testbed_2020-02-03-18:42:00.pcap
-	ps = pcapStore(pcapsFolder = '/testbed/pcaps/filedrop')
-	dest = '/tmp/test3hour.pcap'
-	sdt = datetime.strptime('2020-02-03-18:30:00', FSDTFORMAT)
-	edt = datetime.strptime('2020-02-03-19:00:00', FSDTFORMAT)
+	
+	parser = ArgumentParser(description='Pcap extractor from a folder of specifically named pcap packet capture files')
+	parser.add_argument('-p','--pcappath', help='Path to root of capture file directory - all files are considered',required=True)
+	parser.add_argument('-o','--outpath', help='output pcap path and file name for your analysis - eg /foo/bar/testpcap.pcap',required=True)
+	parser.add_argument('-s', '--startdate', help='Start date/time - must be something like 2020-02-03-18:30:00 for example',required=True)
+	parser.add_argument('-e', '--enddate', help='End date/time - must be something like 2020-02-03-19:00:00 for example',required=True)
+	args = parser.parse_args()
+	assert os.path_isdir(args.pcappath),'Path to pcaps %s not a valid path' % args.pcappath
+	assert os.path_isdir(args.pcappath),'Path to pcaps %s not a valid path' % args.pcappath
+	assert datetime.strptime(args.startdate, FSDTFORMAT),'Supplied start date %s does not parse with %s' % (args.startdate, FSDTFORMAT)
+	assert datetime.strptime(args.enddate, FSDTFORMAT),'Supplied end %s does not parse with %s' % (args.enddate, FSDTFORMAT)
+	outdir = os.path.dirname(args.outpath)
+	if not (os.path.exists(outdir)):
+		pathlib.Path(outdir).mkdir(parents=True, exist_ok=True)	
+	ps = pcapStore(pcapsFolder = args.pcappath)
+	dest = args.outpath
+	sdt = datetime.strptime(args.startdate, FSDTFORMAT)
+	edt = datetime.strptime(args.enddate, FSDTFORMAT)
 	ok = ps.writePeriod(sdt,edt,dest)
+	if not ok:
+		sys.exit(1)
