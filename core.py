@@ -88,6 +88,9 @@ class parDNS():
 		self.ip_macdict = ip_macdict
 		self.geo_ip = geo_ip
 		self.geo_lang = geo_lang
+		logger = logging.getLogger('pardns')
+		logger.setLevel(logger.DEBUG)
+
 
 		
 	def lookup(self,ip):
@@ -130,7 +133,7 @@ class parDNS():
 					except Exception as e:
 						whoname = PRIVATE
 						with self.dnsq_lock: # make sure no race
-							logging.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
+							logger.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
 					ddict['whoname'] = whoname
 					fullname = '%s\n%s' % (fqdname,whoname)
 				else:
@@ -149,12 +152,12 @@ class parDNS():
 						if cityrec:
 							city =  cityrec['names'].get(self.geo_lang,None)
 					else:
-						logging.error("could not load GeoIP data for ip %s" % ip)
+						logger.error("could not load GeoIP data for ip %s" % ip)
 			ddict['city'] = city
 			ddict['country'] = country
 			with self.dnsq_lock: # make sure no race
 				self.drecs[ip] = ddict
-				logging.debug('fast got city country %s,%s fqdname %s for ip %s' % (city,country,ddict['fqdname'],ip))
+				logger.debug('fast got city country %s,%s fqdname %s for ip %s' % (city,country,ddict['fqdname'],ip))
 		
 	def threader(self):
 		while True:
@@ -176,7 +179,7 @@ class parDNS():
 		# wait until the q terminates.
 		self.dnsq.join()
 		dur = time.time() - self.started
-		logging.info('IP lookup n= %d for cache took %.2f seconds' % (len(self.lookmeup),dur))
+		logger.info('IP lookup n= %d for cache took %.2f seconds' % (len(self.lookmeup),dur))
 		return self.drecs
 
 
@@ -200,7 +203,7 @@ class GraphManager(object):
 		try:
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
 		except:
-			logging.warning("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
+			logger.warning("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
 		self.graph = DiGraph()
 		self.agraph = None
 		self.geo_ip = None
@@ -214,6 +217,8 @@ class GraphManager(object):
 		self.dnsCACHE = dnsCACHE
 		self.squishPorts = args.squishportsOFF == False
 		self.parallelDNS = args.paralleldnsOFF == False
+		logger = logging.getLogger("graphmanager")
+		logger.setLevel(logging.DEBUG)
 
 		
 	
@@ -231,7 +236,7 @@ class GraphManager(object):
 		if self.args.restrict:
 			packetsr = [x for x in packets if ((x[0].src in self.args.restrict) or (x[0].dst in self.args.restrict))]
 			if len(packetsr) == 0:
-				logging.warning('### warning - no packets left after filtering on %s - nothing to plot' % self.args.restrict)
+				logging.critical('### warning - no packets left after filtering on %s - nothing to plot' % self.args.restrict)
 				return
 			else:
 				logging.info('%d packets filtered leaving %d with restrict = %s' % (len(packets) - len(packetsr),len(packetsr),self.args.restrict))
@@ -311,21 +316,21 @@ class GraphManager(object):
 			ns = node.split(':')
 			if len(ns) <= 2: # has a port - not a mac or ipv6 address
 				ip = ns[0]
+				ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
+				if ddict == None:
+					lookmeup.append(ip)
 			else:
 				ip = node # might be ipv6 or mac - use as key
-			ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
-			if ddict == None:
-				lookmeup.append(ip)
 		if len(lookmeup) > 0:
 			fastdns = parDNS(lookmeup,self.privates,self.ip_macdict,self.geo_ip,self.geo_lang)
 			drecs = fastdns.doRun()
 			kees = drecs.keys()
 			for k in kees:
 				if self.dnsCACHE.get(k,None):
-					logging.debug('Odd - key %s was already in self.dnsCACHE after fast lookup = %s - fast = %s - not replaced' % (k,self.dnsCACHE[k],drecs[k]))
+					logging.warning('Odd - key %s was already in self.dnsCACHE after fast lookup = %s - fast = %s - not replaced' % (k,self.dnsCACHE[k],drecs[k]))
 				else:
 					self.dnsCACHE[k] = drecs[k]
-					logging.info('## fast looked up %s and added %s' % (k,drecs[k]))
+					logging.debug('## fast looked up %s and added %s' % (k,drecs[k]))
 		else:
 			logging.debug('_fast_retrieve_node found no ip addresses missing from dnsCACHE')
 		
@@ -378,7 +383,7 @@ class GraphManager(object):
 						whoname = qry['asn_description']
 					except Exception as e:
 						whoname = PRIVATE
-						logging.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
+						logging.warning('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
 					ddict['whoname'] = whoname
 					fullname = '%s\n%s' % (fqdname,whoname)
 				else:
@@ -449,6 +454,7 @@ class GraphManager(object):
 			return "%s:%s" % (src, sp), "%s:%s" % (dst, dp), packet
 
 	def draw(self, filename):
+		emptyrec = {'ip':'','fqdname':'','whoname':'','city':'','country':'','mac':''}
 		graph = self.get_graphviz_format()
 		graph.graph_attr['label'] = self.glabel
 		graph.graph_attr['labelloc'] = 't'
@@ -457,16 +463,26 @@ class GraphManager(object):
 		graph.graph_attr['size'] = "1000,1000"
 		graph.graph_attr['resolution'] = 72
 		graph.graph_attr['bgcolor'] = "#FFFFFFFF"
+		graph.graph_attr['font.family'] = ['DejaVu Sans'] #['Tahoma', 'DejaVu Sans', 'Lucida Grande', 'Verdana']
+		graph.graph_attr['font.font'] = ['DejaVu Sans']
 		for node in graph.nodes():
 			snode = str(node)
 			ssnode = snode.split(':') # look for mac or a port on the ip
 			if len(ssnode) <= 2:
 				ip = ssnode[0]
-				ddict = self.dnsCACHE[ip]
+				ddict = self.dnsCACHE.get(ip,emptyrec)
+				if ddict['fqdname'] == '':
+					ddict['fqdname'] = ip
+					logging.debug('Odd. No dnsCACHE entry for snode %s, node %s in draw' % (snode,node))
 			else:
 				ip = snode
-				ddict = self.dnsCACHE[snode] 
+				ddict = self.dnsCACHE.get(snode,emptyrec)
+				if ddict['fqdname'] == '':
+					ddict['fqdname'] = ip
+					logging.debug('Odd. No dnsCACHE entry for snode %s, node %s in draw' % (snode,node))
 			node.attr['shape'] = self.args.shape
+			node.attr['font.family'] = 'sans-serif'
+			node.attr['font.sans-serif'] = ['Verdana']
 			node.attr['fontsize'] = '11'
 			node.attr['width'] = '0.5'
 			node.attr['color'] = 'yellowgreen' # assume all are local hosts
@@ -530,6 +546,8 @@ class GraphManager(object):
 		return "hsl({}, {}%, {}%)".format(h, s, l)		
 			
 	def wordClouds(self,outfname,protoc):
+		logger = logging.getLogger('wordclouds')
+		logger.setLevel(logging.DEBUG)
 		ipfq = {}
 		graph = self.agraph # assume already drawn
 		for node in self.graph.nodes():
@@ -571,7 +589,7 @@ class GraphManager(object):
 				city = ''
 				country = ''
 			wts = weights.get(fqname,None)
-			if wts and len(wts.keys()) > 1:
+			if wts and len(wts.keys()) >= 1:
 				nn = len(wts.keys())
 				destfqlist = wts.keys()
 				longname = ' '.join([x for x in (node,fqname,whoname,city,country) if x > ''])
