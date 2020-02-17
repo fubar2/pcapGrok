@@ -92,7 +92,7 @@ def doLayer(layer, packets,fname,args, gM):
 			gM.wordClouds(ofn,"All")
 			logging.debug('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
 			print('layer 3 - did wordclouds to',ofn)
-		if nn > args.nmax:
+		if nn > args.nmax and layer == 4:
 			logging.debug('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
 			for kind in llook.keys():
 				subset = [x for x in packets if x != None and x.haslayer(kind)]  
@@ -109,7 +109,7 @@ def doLayer(layer, packets,fname,args, gM):
 						if layer == 3 and not args.wordcloudsOFF:
 							if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
 								pathlib.Path(os.path.join(args.outpath,'wordclouds')).mkdir(parents=True, exist_ok=True)
-							pofn = '%s_destwordcloud_%d_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
+							pofn = '%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
 							if args.outpath:
 								pofn = os.path.join(args.outpath,'wordclouds',pofn)
 							gM.wordClouds(pofn,kind)
@@ -167,6 +167,9 @@ def doPcap(pin,args,filesused,dnsCACHE,gM):
 	if (args.blacklist or args.whitelist):
 		logging.debug('### Read %d packets. After applying supplied filters %d packets are left. wl=%s bl= %s' % (len(pin),len(packets),wl,bl))
 	ip_macdict,mac_ipdict = checkmacs(packets)
+	s ='### dopcap input has %d packets, %d mac addresses and %d ip addresses' % (len(packets),len(mac_ipdict.keys()),len(ip_macdict.keys()))
+	logging.debug(s)
+	print(s)
 	logging.info('$$$$ mac_ipdict = %s' % mac_ipdict)
 	gM.ip_macdict = ip_macdict
 	gM.mac_ipdict = mac_ipdict
