@@ -48,7 +48,7 @@ parser.add_argument('--layer3', action='store_true', help='IP layer message grap
 parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph')
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
 parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
-parser.add_argument('-p', '--pictures', help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
+parser.add_argument('-p', '--pictures', default=None, help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
 parser.add_argument('-P', '--paralleldnsOFF', action='store_true',default=False, help='Turn OFF threading for parallel dns/whois queries. Default is to use threading')
 parser.add_argument('-S', '--squishportsOFF', action='store_true',default=False, help='Turn OFF layer4 port squishing to simplify networks by ignoring ports - all port activity is summed to the host ip. Default is to squish ports')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
@@ -69,9 +69,27 @@ def doLayer(layer, packets,fname,args, gM):
 	run a single layer analysis
 	"""
 	args.nmax = int(args.nmax)
-	gM.title = "Layer %d using packets from %s" % (layer,title)
+	gM.reset(packets,layer)
 	nn = len(gM.graph.nodes())
+	if nn < 1:
+		logging.debug('Got zero nodes from file %s layer %d- nothing to draw' % (fname,layer))
+		return copy.copy(gM.dnsCACHE)
 	if args.pictures:
+		title = gM.title
+		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
+		if args.outpath:
+			ofn = os.path.join(args.outpath,ofn)
+		gM.draw(filename=ofn)
+		print('drew',ofn)
+		if layer == 3 and not args.wordcloudsOFF:
+			if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
+				pathlib.Path(os.path.join(args.outpath,'wordclouds')).mkdir(parents=True, exist_ok=True)
+			ofn = '%s_destwordcloud_layer%d_%s_%s' % ('All',layer,title.replace('+','_'),args.pictures)
+			if args.outpath:
+				ofn = os.path.join(args.outpath,'wordclouds',ofn)
+			gM.wordClouds(ofn,"All")
+			logging.debug('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
+			print('layer 3 - did wordclouds to',ofn)
 		if nn > args.nmax:
 			logging.debug('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
 			for kind in llook.keys():
@@ -87,25 +105,16 @@ def doLayer(layer, packets,fname,args, gM):
 						gM.draw(filename = ofn)
 						logging.debug('drew %s %d nodes' % (ofn,nn))
 						if layer == 3 and not args.wordcloudsOFF:
+							if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
+								pathlib.Path(os.path.join(args.outpath,'wordclouds')).mkdir(parents=True, exist_ok=True)
 							ofn = '%s_destwordcloud_layer%d_%s_%s' % (kind,layer,title.replace('+','_'),args.pictures)
 							if args.outpath:
-								ofn = os.path.join(args.outpath,ofn)
+								ofn = os.path.join(args.outpath,'wordclouds',ofn)
 							gM.wordClouds(ofn,kind)
-							logging.debug('drew %s wordcloud to %s' % (kind,ofn))
+							logging.debug('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,ofn))
+							print('layer 3 - did wordclouds to',ofn)
 					else:
 						logging.debug('found %d nodes so not a very worthwhile graph' % nn)
-		gM.reset(packets,layer)
-		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
-		if args.outpath:
-			ofn = os.path.join(args.outpath,ofn)
-		if nn > 1:
-			gM.draw(filename=ofn)
-			if layer == 3 and not args.wordcloudsOFF:
-				ofn = '%s_destwordcloud_layer%d_%s_%s' % ('All',layer,title.replace('+','_'),args.pictures)
-				if args.outpath:
-					ofn = os.path.join(args.outpath,ofn)
-				gM.wordClouds(ofn,"All")
-				logging.debug('drew %s wordcloud to %s' % ('All',ofn))
 	if args.frequent_in:
 		gM.get_in_degree()
 	if args.frequent_out:
@@ -113,7 +122,7 @@ def doLayer(layer, packets,fname,args, gM):
 	if args.graphviz:
 		gM.get_graphviz_format(args.graphviz)
 	dnsCACHE = copy.copy(gM.dnsCACHE)
-	return(dnsCACHE)
+	return dnsCACHE
 
 def checkmacs(packets):
 	"""best to determine mac/ip associations for local hosts before filtering on layer - layer4 changes the packet....
@@ -130,7 +139,6 @@ def checkmacs(packets):
 				dhcpo = dhcpp.options
 				s = str(dhcpo)
 				logging.debug('#### found dhcp info = %s' % s)
-				dhcpf.write(s)
 	dhcpf.close()
 	return(ip_macdict,mac_ipdict)
 
@@ -483,7 +491,11 @@ if __name__ == '__main__':
 			rl = [x.lower() for x in r]
 			args.restrict = rl
 		if args.append: # old style amalgamated input
-			pin = ScapySource.load(realfiles)
+			rpin = ScapySource.load(realfiles)
+			pin = [x for x in rpin if x.haslayer(Ether)]
+			diff = len(rpin) - len(pin)
+			if abs(diff) > 0:
+				logging.debug('##### Found %d packets without an ethernet layer in %s' % (diff,realfiles))
 			title = '+'.join([os.path.basename(x) for x in realfiles])
 			if len(title) > 50:
 				title = title[:50] + '_etc'
@@ -499,7 +511,11 @@ if __name__ == '__main__':
 					kydres = kyd(fname)
 					logging.info('Got kyd results %s' % kydres)
 				try:
-					pin = rdpcap(fname)
+					rpin = rdpcap(fname)
+					pin = [x for x in rpin if x.haslayer(Ether)]
+					diff = len(rpin) - len(pin)
+					if abs(diff) > 0:
+						logging.debug('#### Found %d packets without an ethernet layer in %s' % (diff,fname))
 				except:
 					logging.debug('%s is not a valid scapy pcap file' % fname)
 					continue

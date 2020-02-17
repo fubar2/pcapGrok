@@ -107,7 +107,7 @@ class pcapStore():
 				if (len(pin) > 0):
 					mint = min([x.time for x in pin])
 					maxt = max([x.time for x in pin])
-					print('file',rdfname,'has min',mint,'max',maxt)
+					logging.debug('file %s has min %.2f and max %.2f' % (rdfname,mint,maxt))
 					pin = [x for x in pin if int(x.time) >= sdtt and int(x.time) <= edtt] # gotta love scapy 
 					if len(pin) > 0:
 						npkt += len(pin)
