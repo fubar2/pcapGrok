@@ -11,7 +11,11 @@ It offers
 - writes a log with lots of interesting notes as pcapgrok.log 
 
 ## Purpose
-Understanding network traffic from IoT devices was the motivation for this code. Network communication graphs show hosts as nodes and communication as edges, making complex relationships easier to see. 
+Understanding network traffic from IoT devices was the motivation for this code and it is only suitable for relatively small packet
+capture files. A 100MB pcap with about 70k packets requires about 2G of ram to process, It was not designed for larger pcap files so please don't be
+surprised if it doesn't cope with really big graphs.
+
+Network communication graphs show hosts as nodes and communication as edges, making complex relationships easier to see. 
 However, ip and mac addresses are hard to figure out unless additional information about the host is provided such as whois and domain name if available.
 Scapy has some inbuilt visualisations and they can probably be applied to filtered data but we wanted finer control over the graph layout and decent annotation of each node.
 Seeing the packets at different layers is a good first level clarification and PcapVis provided the basis for this application. Mateusz' insight 

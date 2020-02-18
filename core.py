@@ -557,6 +557,69 @@ class GraphManager(object):
 		return "hsl({}, {}%, {}%)".format(h, s, l)		
 			
 	def wordClouds(self,outfname,protoc):
+		graph = self.agraph # assume already drawn
+		totalbytes = 0
+		weights = {}
+		for edge in graph.edges():
+			src = edge[0]
+			weights[src] = {}
+			for dest in self.graph[edge[0]].keys():
+				cnx = self.graph[src][dest]
+				tb = cnx['transmitted']
+				totalbytes += tb
+				if weights[src].get(dest,None):
+					weights[src][dest] += tb
+				else:
+					weights[src][dest] = tb
+		for node in graph.nodes():
+			snode = str(node)
+			dnrec = self.dnsCACHE.get(snode,None)
+			if dnrec:
+				fqname = dnrec['fqdname']
+				whoname = dnrec['whoname']
+				city = dnrec['city']
+				country = dnrec['country']
+			else:
+				fqname = node
+				whoname = ''
+				city = ''
+				country = ''
+			wts = weights.get(snode,None)
+			if wts and len(wts.keys()) > 1:
+				annowts = {}
+				for dest in wts.keys():
+					byts = wts[dest]
+					dnrec = self.dnsCACHE.get(snode,None)
+					if dnrec:
+						fqname = dnrec['fqdname']
+						whoname = dnrec['whoname']
+						city = dnrec['city']
+						country = dnrec['country']
+					else:
+						fqname = node
+						whoname = ''
+						city = ''
+						country = ''
+
+					fullname = ' \n'.join([x for x in (node,fqname,whoname,city,country) if x > ''])
+					annowts[fullname] = byts
+				nn = len(annowts.keys())
+				destfqlist = annowts.keys()
+				longname = ' '.join([x for x in (node,fqname,whoname,city,country) if x > ''])
+				wc = WordCloud(background_color="black",width=1200, height=1000,max_words=200,
+				 min_font_size=20, color_func = self.random_color_func).generate_from_frequencies(annowts)
+				f = plt.figure(figsize=(10, 10))
+				plt.imshow(wc, interpolation='bilinear')
+				plt.axis('off')
+				plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
+				ofss = outfname.split('destwordcloud') # better be there
+				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
+				f.savefig(ofn, bbox_inches='tight')
+				self.logger.info('Wrote wordcloud with %d entries for %s' % (nn,longname))
+				plt.close(f) 
+				
+				
+	def oldwordClouds(self,outfname,protoc):
 		ipfq = {}
 		graph = self.agraph # assume already drawn
 		for node in self.graph.nodes():
@@ -573,11 +636,10 @@ class GraphManager(object):
 		weights = {}
 		for edge in graph.edges():
 			src = edge[0]
-			srck = ipfq.get(src,src)
-			weights[srck] = {}
+			weights[src] = {}
 			for dest in self.graph[edge[0]].keys():
 				destk = ipfq.get(dest,dest)
-				cnx = self.graph[edge[0]][dest]
+				cnx = self.graph[edge[0]][destk]
 				tb = cnx['transmitted']
 				totalbytes += tb
 				if weights[srck].get(destk,None):
@@ -612,5 +674,7 @@ class GraphManager(object):
 				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
 				f.savefig(ofn, bbox_inches='tight')
 				plt.close(f) 
+
+
 
 
