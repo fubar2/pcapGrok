@@ -560,6 +560,5 @@ if __name__ == '__main__':
 	else:
 		s = '## input file parameter -i or --pcap  = %s but no valid pcap files found - stopping' % args.pcaps
 		print(s)
-		logger.critical(s)
 		sys.exit(1)
 

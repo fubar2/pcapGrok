@@ -88,8 +88,8 @@ class parDNS():
 		self.ip_macdict = ip_macdict
 		self.geo_ip = geo_ip
 		self.geo_lang = geo_lang
-		logger = logging.getLogger('pardns')
-		logger.setLevel(logger.DEBUG)
+		self.logger = logging.getLogger('pardns')
+		self.logger.setLevel(logger.DEBUG)
 
 
 		
@@ -133,7 +133,7 @@ class parDNS():
 					except Exception as e:
 						whoname = PRIVATE
 						with self.dnsq_lock: # make sure no race
-							logger.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
+							self.logger.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
 					ddict['whoname'] = whoname
 					fullname = '%s\n%s' % (fqdname,whoname)
 				else:
@@ -152,12 +152,12 @@ class parDNS():
 						if cityrec:
 							city =  cityrec['names'].get(self.geo_lang,None)
 					else:
-						logger.error("could not load GeoIP data for ip %s" % ip)
+						self.logger.error("could not load GeoIP data for ip %s" % ip)
 			ddict['city'] = city
 			ddict['country'] = country
 			with self.dnsq_lock: # make sure no race
 				self.drecs[ip] = ddict
-				logger.debug('fast got city country %s,%s fqdname %s for ip %s' % (city,country,ddict['fqdname'],ip))
+				self.logger.debug('fast got city country %s,%s fqdname %s for ip %s' % (city,country,ddict['fqdname'],ip))
 		
 	def threader(self):
 		while True:
@@ -179,7 +179,7 @@ class parDNS():
 		# wait until the q terminates.
 		self.dnsq.join()
 		dur = time.time() - self.started
-		logger.info('IP lookup n= %d for cache took %.2f seconds' % (len(self.lookmeup),dur))
+		self.logger.info('IP lookup n= %d for cache took %.2f seconds' % (len(self.lookmeup),dur))
 		return self.drecs
 
 
@@ -192,6 +192,8 @@ class GraphManager(object):
 	def __init__(self,args, dnsCACHE,ip_macdict,mac_ipdict,glabel,filesused):
 		""" reset as needed once created
 		"""
+		self.logger = logging.getLogger("graphmanager")
+		self.logger.setLevel(logging.DEBUG)
 		self.args = args
 		privatestarts = ['10.','192.168.','255.255.255.255','0.0.0.0']
 		more = ["172.%d" % i for i in range(16,32)]
@@ -203,7 +205,7 @@ class GraphManager(object):
 		try:
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
 		except:
-			logger.warning("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
+			self.logger.warning("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
 		self.graph = DiGraph()
 		self.agraph = None
 		self.geo_ip = None
@@ -217,12 +219,12 @@ class GraphManager(object):
 		self.dnsCACHE = dnsCACHE
 		self.squishPorts = args.squishportsOFF == False
 		self.parallelDNS = args.paralleldnsOFF == False
-		logger = logging.getLogger("graphmanager")
-		logger.setLevel(logging.DEBUG)
 
 		
 	
-	def reset(self, packets, layer,gtitle):
+	def reset(self, packets, layer, gtitle):
+		""" get rid of large structures and reuse between layers and separate protocol runs
+		"""
 		del self.graph
 		del self.data
 		del self.agraph
@@ -236,10 +238,10 @@ class GraphManager(object):
 		if self.args.restrict:
 			packetsr = [x for x in packets if ((x[0].src in self.args.restrict) or (x[0].dst in self.args.restrict))]
 			if len(packetsr) == 0:
-				logging.critical('### warning - no packets left after filtering on %s - nothing to plot' % self.args.restrict)
+				self.logger.critical('### warning - no packets left after filtering on %s - nothing to plot' % self.args.restrict)
 				return
 			else:
-				logging.info('%d packets filtered leaving %d with restrict = %s' % (len(packets) - len(packetsr),len(packetsr),self.args.restrict))
+				self.logger.info('%d packets filtered leaving %d with restrict = %s' % (len(packets) - len(packetsr),len(packetsr),self.args.restrict))
 				packets = packetsr
 		#self.checkmacs(packets)
 		if self.layer == 2:
@@ -327,12 +329,12 @@ class GraphManager(object):
 			kees = drecs.keys()
 			for k in kees:
 				if self.dnsCACHE.get(k,None):
-					logging.warning('Odd - key %s was already in self.dnsCACHE after fast lookup = %s - fast = %s - not replaced' % (k,self.dnsCACHE[k],drecs[k]))
+					self.logger.warning('Odd - key %s was already in self.dnsCACHE after fast lookup = %s - fast = %s - not replaced' % (k,self.dnsCACHE[k],drecs[k]))
 				else:
 					self.dnsCACHE[k] = drecs[k]
-					logging.debug('## fast looked up %s and added %s' % (k,drecs[k]))
+					self.logger.debug('## fast looked up %s and added %s' % (k,drecs[k]))
 		else:
-			logging.debug('_fast_retrieve_node found no ip addresses missing from dnsCACHE')
+			self.logger.debug('_fast_retrieve_node found no ip addresses missing from dnsCACHE')
 		
 
 		
@@ -383,7 +385,7 @@ class GraphManager(object):
 						whoname = qry['asn_description']
 					except Exception as e:
 						whoname = PRIVATE
-						logging.warning('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
+						self.logger.warning('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
 					ddict['whoname'] = whoname
 					fullname = '%s\n%s' % (fqdname,whoname)
 				else:
@@ -402,11 +404,11 @@ class GraphManager(object):
 						if cityrec:
 							city =  cityrec['names'].get(self.args.geolang,None)
 					else:
-						logging.error("could not load GeoIP data for ip %s" % ip)
+						self.logger.error("could not load GeoIP data for ip %s" % ip)
 			ddict['city'] = city
 			ddict['country'] = country
 			self.dnsCACHE[node] = ddict
-			logging.info('## looked up %s and added %s' % (node,ddict))
+			self.logger.info('## looked up %s and added %s' % (node,ddict))
 		
 
 
@@ -473,13 +475,13 @@ class GraphManager(object):
 				ddict = self.dnsCACHE.get(ip,emptyrec)
 				if ddict['fqdname'] == '':
 					ddict['fqdname'] = ip
-					logging.debug('Odd. No dnsCACHE entry for snode %s, node %s in draw' % (snode,node))
+					self.logger.debug('Odd. No dnsCACHE entry for snode %s, node %s in draw' % (snode,node))
 			else:
 				ip = snode
 				ddict = self.dnsCACHE.get(snode,emptyrec)
 				if ddict['fqdname'] == '':
 					ddict['fqdname'] = ip
-					logging.debug('Odd. No dnsCACHE entry for snode %s, node %s in draw' % (snode,node))
+					self.logger.debug('Odd. No dnsCACHE entry for snode %s, node %s in draw' % (snode,node))
 			node.attr['shape'] = self.args.shape
 			node.attr['font.family'] = 'sans-serif'
 			node.attr['font.sans-serif'] = ['Verdana']
@@ -546,8 +548,6 @@ class GraphManager(object):
 		return "hsl({}, {}%, {}%)".format(h, s, l)		
 			
 	def wordClouds(self,outfname,protoc):
-		logger = logging.getLogger('wordclouds')
-		logger.setLevel(logging.DEBUG)
 		ipfq = {}
 		graph = self.agraph # assume already drawn
 		for node in self.graph.nodes():
@@ -599,7 +599,6 @@ class GraphManager(object):
 				plt.imshow(wc, interpolation='bilinear')
 				plt.axis('off')
 				plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
-				# plt.show()
 				ofss = outfname.split('destwordcloud') # better be there
 				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
 				f.savefig(ofn, bbox_inches='tight')
