@@ -4,5 +4,4 @@ networkx
 maxminddb
 pygraphviz
 ipwhois
-dpkt
 requests
