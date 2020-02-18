@@ -195,7 +195,7 @@ class GraphManager(object):
 		self.logger = logging.getLogger("graphmanager")
 		self.logger.setLevel(logging.DEBUG)
 		self.args = args
-		privatestarts = ['10.','192.168.','255.255.255.255','0.0.0.0','224.0.0','224.0.1','224.1','224.2','232.'.'233.','234.','239.']
+		privatestarts = ['10.','192.168.','255.255.255.255','0.0.0.0','224.0.0','224.0.1','224.1','224.2','232.','233.','234.','239.']
 		more = ["172.%d" % i for i in range(16,32)]
 		privatestarts += more
 		more =  ["100.%d" % i for i in range(64,128)]
