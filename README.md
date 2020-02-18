@@ -2,18 +2,23 @@
 
 ## Differences from PcapVis
 pcapGrok is a hack based on PcapVis https://github.com/mateuszk87/PcapViz 
-It offers 
-- additional command line controls 
+Enhancements include 
+- additional display command line controls 
 - default batch mode for multiple pcap files
 - default all layers if no single layer requested.
 - whois RDAP 'asn_description' data when geoIP and socket.getfqdn draw blanks.
 - tables of traffic including all available identifying data for each host
 - writes a log with lots of interesting notes as pcapgrok.log 
+- wordclouds for all hosts (with 2 or more destinations) showing traffic weighted destinations
+- optional tshark statistics and files - requires tshark to be installed - highly recommended
 
 ## Purpose
-Understanding network traffic from IoT devices was the motivation for this code and it is only suitable for relatively small packet
-capture files. A 100MB pcap with about 70k packets requires about 2G of ram to process, It was not designed for larger pcap files so please don't be
-surprised if it doesn't cope with really big graphs.
+Understanding network traffic from IoT devices was the motivation for this code. It works readonably well for relatively small packet
+capture files. A 100MB pcap with about 70k packets requires about 2G of ram to process and as the graphs become more complex, more ram
+will be used. It might work for a 1G file if you have a boatload of ram but I cannot imagine what use a complex graph will be. It was 
+not designed for large pcap files so please don't be surprised if it doesn't cope with really big graphs. You'll be wanting the whole
+elastic backend thing with security onion for that. This is a toy by comparison but one that works fine for the small files needed to
+disect newly configured IoT devices.
 
 Network communication graphs show hosts as nodes and communication as edges, making complex relationships easier to see. 
 However, ip and mac addresses are hard to figure out unless additional information about the host is provided such as whois and domain name if available.
@@ -36,7 +41,7 @@ protocol also helps simplify very complex graphs by breaking them down.
 - Lists the most frequently contacted and frequently sending machines and identifying information
 - command line choice of Graphviz graph layout engine such as dot or sfdp.
 - optionally amalgamates all input pcap files into one before drawing graphs. Default is to draw graphs for each input pcap separately.
-
+- optional wordclouds of destinations weighted by proportion of ip traffic. 
 
 ## Usage
 
@@ -46,8 +51,8 @@ usage: pcapGrok.py [-h] [-a] [-b [BLACKLIST [BLACKLIST ...]]]
                    [-hf HOSTSFILE] [-i [PCAPS [PCAPS ...]]] [-k KYDDBPATH]
                    [-l GEOLANG] [--layer2] [--layer3] [--layer4] [-n NMAX]
                    [-o OUTPATH] [-p PICTURES] [-P] [-S]
-                   [-r [RESTRICT [RESTRICT ...]]] [-s SHAPE]
-                   [-w [WHITELIST [WHITELIST ...]]]
+                   [-r [RESTRICT [RESTRICT ...]]] [-s SHAPE] [-T]
+                   [-w [WHITELIST [WHITELIST ...]]] [-W]
 
 Network packet capture (standard .pcap file) topology and message mapper.
 Optional protocol whitelist or blacklist and mac restriction to simplify
@@ -108,10 +113,11 @@ optional arguments:
                         address(es) as "xx:xx:xx:xx:xx:xx"
   -s SHAPE, --shape SHAPE
                         Graphviz node shape - circle, diamond, box etc.
+  -T, --tsharkON        Turn tshark reports on
   -w [WHITELIST [WHITELIST ...]], --whitelist [WHITELIST [WHITELIST ...]]
                         Whitelist of protocols - only packets matching these
                         layers shown - eg IP Raw HTTP
-
+  -W, --wordcloudsOFF   Turn OFF layer 3 wordcloud generation for each host
 
 ```
 
@@ -248,6 +254,12 @@ Return hosts with largest numbers of incoming packets:
 	'subdivisions': [{'geoname_id': 2155400, 'iso_code': 'NSW', 'names': {'en': 'New South Wales', 'fr': 'Nouvelle-Galles du Sud', 'pt-BR': 'Nova Gales do Sul', 
 	'ru': 'Новый Южный Уэльс'}}]}
 	```
+	
+	You will want the tshark reports so you are advised to install tshark. It's best done from the git stable release, but for debian flavours the current versions are out dated but should work.
+    ```
+    sudo apt install tshark
+    ```
+    should do the needfull.
 
 ### Installation Debian
 
@@ -280,7 +292,8 @@ Note that there are at present 2 warnings about deprecated features in graphviz 
 Without access to the geoIP data, two of the tests will always fail.
 
 ## Acknowledgement
-Maxmind ask that this be included - even though we do not distribute the data here it is...
+Maxmind ask that this be included - even though we do not distribute the data here it is. Respect where it is due although 
+monetising the free version seems short sighted to me - the internet routes around damage.
 
-This product includes GeoLite2 data created by MaxMind, available from
-<a href="https://www.maxmind.com">https://www.maxmind.com</a>.
+'''This product includes GeoLite2 data created by MaxMind, available from
+<a href="https://www.maxmind.com">https://www.maxmind.com</a>.'''
