@@ -12,14 +12,16 @@ Enhancements include
 - wordclouds for all hosts (with 2 or more destinations) showing traffic weighted destinations
 - optional tshark statistics and files - requires tshark to be installed - highly recommended
 
-## Purpose
+## RAM and patience will limit the size of input capture files - up to 100MB is manageable..
 Understanding network traffic from IoT devices was the motivation for this code. It works readonably well for relatively small packet
-capture files. A 100MB pcap with about 70k packets requires about 2G of ram to process and as the graphs become more complex, more ram
-will be used. It might work for a 1G file if you have a boatload of ram but I cannot imagine what use a complex graph will be. It was 
+capture files. A 6MB pcap file with 14K packets, 11 MAC addresses and 34 IP addresses is completed in about 50 seconds on a low end desktop.
+However, a 100MB pcap with about 70k packets requires about 2G of RAM to process and as the graphs become more complex, correspondingly more RAM
+will be used. It might work for a 1G file if you have a boatload of RAM but I cannot imagine what use a complex graph will be. It was 
 not designed for large pcap files so please don't be surprised if it doesn't cope with really big graphs. You'll be wanting the whole
-elastic backend thing with security onion for that. This is a toy by comparison but one that works fine for the small files needed to
+elastic backend thing with Securityonion or Malcolm for that. This is a toy by comparison but one that works fine for the small files needed to
 disect newly configured IoT devices.
 
+## Purposes
 Network communication graphs show hosts as nodes and communication as edges, making complex relationships easier to see. 
 However, ip and mac addresses are hard to figure out unless additional information about the host is provided such as whois and domain name if available.
 Scapy has some inbuilt visualisations and they can probably be applied to filtered data but we wanted finer control over the graph layout and decent annotation of each node.
@@ -30,7 +32,7 @@ helps focus on the traffic of interest, effectively reducing noise from irreleva
 protocol also helps simplify very complex graphs by breaking them down.
 
 ## Features
-- Draws network topology graphs. 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
+- Draws network topology graphs. Layer 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
 - Graph node labels show host FQDN, country and city if available from maxminddb and socket.getfqdn. Otherwise "asn_description" from RDAP whois data is shown.
 - fqdname/whois/geo lookup is threaded (supply -P for slower serial behaviour) and results are saved as cache file - can be reused. These are very informative when there is traffic to and from cloud providers, since they are nearly always identified. Violet nodes are outside the LAN. 
 - Graph node colours are informative - yellow=broadcast, violet = remote, powderblue = LAN

@@ -50,7 +50,7 @@ parser.add_argument('-n', '--nmax', default=100, help='Automagically draw indivi
 parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
 parser.add_argument('-p', '--pictures', default=None, help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
 parser.add_argument('-P', '--paralleldnsOFF', action='store_true',default=False, help='Turn OFF threading for parallel dns/whois queries. Default is to use threading')
-parser.add_argument('-S', '--squishportsOFF', action='store_true',default=False, help='Turn OFF layer4 port squishing to simplify networks by ignoring ports - all port activity is summed to the host ip. Default is to squish ports')
+parser.add_argument('-S', '--squishportsON', action='store_true',default=False, help='Turn ON layer4 port squishing to simplify networks by ignoring ports - effectively same as IP layer?')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-T', '--tsharkON', action='store_true',default=False, help='Turn tshark reports on')
@@ -82,14 +82,10 @@ def doLayer(layer, packets,fname,args, gM):
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
-		if layer == 3 and not args.wordcloudsOFF:
+		if layer == 3 and not args.wordcloudsOFF and args.pictures:
 			if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
 				pathlib.Path(os.path.join(args.outpath,'wordclouds')).mkdir(parents=True, exist_ok=True)
 			ofn = '%s_destwordcloud_layer%d_%s_%s' % ('All',layer,title.replace('+','_'),args.pictures)
-			if args.outpath:
-				ofn = os.path.join(args.outpath,'wordclouds',ofn)
-				if not (os.path.exists(ofn)):
-					pathlib.Path(ofn).mkdir(parents=True, exist_ok=True)
 			gM.wordClouds(ofn,"All")
 			logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
 

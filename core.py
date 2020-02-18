@@ -58,6 +58,7 @@ from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import ipaddress
 
 
 
@@ -76,6 +77,7 @@ NTHREADS=250
 
 class parDNS():
 	""" dns/whois lookups parallel for speed
+	filter with ipaddress module
 	"""
 
 	def __init__(self,lookmeup,privates,ip_macdict,geo_ip,geo_lang):
@@ -95,37 +97,49 @@ class parDNS():
 		
 	def lookup(self,ip):
 			ddict = copy.copy(self.drec)
-			ddict['ip'] = ip	
-			ns = ip.split(':')
-			city = ''
-			country = ''
-			localip = any ([ip.startswith(y) for y in self.privates]) # is private
+			ddict['ip'] = ip
+			whoname = ''
 			mymac = self.ip_macdict.get(ip,None)
-			if mymac and localip:
-				ddict['mac'] = mymac
-			if ip.startswith('240.0'): # is igmp
-				ddict['fqdname'] = 'Multicast'
-				ddict['whoname'] = 'IGMP'
-			if ip.startswith(MULTIMAC):
-				ddict['fqdname'] = 'Multicast'
-				ddict['whoname'] = 'IGMP'
-			elif ip.startswith(UNIMAC):
-				ddict['fqdname'] = 'Unicast'
-				ddict['whoname'] = 'IGMP'
-			elif ip == BROADCASTMAC:
-				ddict['fqdname'] = 'Broadcast'
-				ddict['whoname'] = 'Local'
-			elif ip.startswith(ROUTINGDISCOVERY):
-				ddict['fqdname'] = 'Routingdiscovery'
-				ddict['whoname'] = 'Local'
-			elif ip == '0.0.0.0':
-				ddict['whoname'] = 'Local'
-			elif localip:
-				ddict['whoname'] = 'Local'
-			else:
-				if ip > '' and not (':' in ip) and not localip:
+			fqdname = ''
+			city = ''
+			country = ''	
+			ns = ip.split(':')
+			iptrim = ip
+			if len(ns) <= 2:
+				iptrim = ns[0]
+			elif len(ns) == 6: # mac
+				iptrim = None
+				whoname = PRIVATE		
+			if iptrim:
+				try:
+					ipa = ipaddress.ip_address(iptrim)
+				except:
+					ipa == None
+				if ipa:
+					if ipa.is_local:
+						whoname = PRIVATE
+						fqdname = 'LocalNetwork'
+					if ipa.is_multicast:
+						whoname = PRIVATE
+						fqdname = 'Multicast'
+					if ipa.is_link_local or ipa.is_private:
+						whoname = PRIVATE
+						fqdname = 'LinkLocal'
+					if ipa.is_loopback:
+						whoname = PRIVATE
+						fqdname = 'Loopback'
+					if ipa.is_global:
+						whoname = PRIVATE
+						fqdname = 'Global'
+					if ipa.is_reserved:
+						whoname = PRIVATE
+						fqdname = 'Reserved'
+					if ipa.is_unspecified:
+						whoname = PRIVATE
+						fqdname = 'Unspecified'
+			if whoname == '': # not yet found so try lookup		
+				if ip > '' and not (':' in ip):
 					fqdname = socket.getfqdn(ip)
-					ddict['fqdname'] = fqdname
 					try:
 						who = IPWhois(ip)
 						qry = who.lookup_rdap(depth=1)
@@ -134,27 +148,23 @@ class parDNS():
 						whoname = PRIVATE
 						with self.dnsq_lock: # make sure no race
 							self.logger.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
-					ddict['whoname'] = whoname
 					fullname = '%s\n%s' % (fqdname,whoname)
-				else:
-					ddict['fqdname'] = ''
-					if len(ns) == 6 and ddict['mac'] == '':
-						ddict['mac'] = ip
-				city = ''
-				country = ''
-				if ip > '' and self.geo_ip and ddict['whoname'] != PRIVATE and (':' not in ip):			
-					mmdbrec = self.geo_ip.get(ip)
-					if mmdbrec != None:
-						countryrec = mmdbrec.get('country',None)
-						cityrec = mmdbrec.get('city',None)
-						if countryrec: # some records have one but not the other....
-							country = countryrec['names'].get(self.geo_lang,None)
-						if cityrec:
-							city =  cityrec['names'].get(self.geo_lang,None)
-					else:
-						self.logger.error("could not load GeoIP data for ip %s" % ip)
+					if ip > '' and self.geo_ip and ddict['whoname'] != PRIVATE and (':' not in ip):			
+						mmdbrec = self.geo_ip.get(ip)
+						if mmdbrec != None:
+							countryrec = mmdbrec.get('country',None)
+							cityrec = mmdbrec.get('city',None)
+							if countryrec: # some records have one but not the other....
+								country = countryrec['names'].get(self.geo_lang,None)
+							if cityrec:
+								city =  cityrec['names'].get(self.geo_lang,None)
+						else:
+							self.logger.error("could not load GeoIP data for ip %s" % ip)
 			ddict['city'] = city
 			ddict['country'] = country
+			ddict['whoname'] = whoname
+			ddict['fqdname'] = fqdname
+			ddict['mac'] = mymac
 			with self.dnsq_lock: # make sure no race
 				self.drecs[ip] = ddict
 				self.logger.debug('fast got city country %s,%s fqdname %s for ip %s' % (city,country,ddict['fqdname'],ip))
@@ -195,22 +205,6 @@ class GraphManager(object):
 		self.logger = logging.getLogger("graphmanager")
 		self.logger.setLevel(logging.DEBUG)
 		self.args = args
-		privatestarts = ['10.','192.168.','255.255.255.255','0.0.0.0','224.0.0','224.0.1','224.1','224.2','232.','233.','234.','239.']
-		more = ["172.%d" % i for i in range(16,32)]
-		privatestarts += more
-		more =  ["100.%d" % i for i in range(64,128)]
-		privatestarts += more
-		more =  ["224.0.%d" % i for i in range(2,256)]
-		privatestarts += more
-		more =  ["224.%d" % i for i in range(252,256)]
-		privatestarts += more
-		more =  ["%d" % i for i in range(225,231)]
-		privatestarts += more
-		more =  ["%d" % i for i in range(225,231)]
-		privatestarts += more
-		
-		self.privates = privatestarts
-		# if any ([x.startswith[y] for y in privates]): # is private
 		try:
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
 		except:
@@ -226,7 +220,7 @@ class GraphManager(object):
 		self.ip_macdict = ip_macdict
 		self.mac_ipdict = mac_ipdict
 		self.dnsCACHE = dnsCACHE
-		self.squishPorts = args.squishportsOFF == False
+		self.squishPorts = args.squishportsON == True
 		self.parallelDNS = args.paralleldnsOFF == False
 
 		
@@ -535,7 +529,11 @@ class GraphManager(object):
 			edge.attr['minlen'] = '2'
 			edge.attr['penwidth'] = min(max(0.05,connection['connections'] * 1.0 / len(self.graph.nodes())), 2.0)
 		graph.layout(prog=self.args.layoutengine)
-		graph.draw(filename)
+		#graph.draw(filename)
+		dotfilename = '%s.dot' % filename
+		graph.write(dotfilename)
+		os.system('sfdp -x -Goverlap=scale -Tpdf %s > %s' % (dotfilename,filename))
+		os.system('rm %s' % dotfilename)
 		self.agraph = graph
 
 	def get_graphviz_format(self, filename=None):
@@ -580,12 +578,13 @@ class GraphManager(object):
 				city = dnrec['city']
 				country = dnrec['country']
 			else:
+				self.logger.warning('Odd: no dnsCACHE record for node %s found in wordcloud generation' % (snode))
 				fqname = node
 				whoname = ''
 				city = ''
 				country = ''
 			wts = weights.get(snode,None)
-			if wts and len(wts.keys()) > 1:
+			if wts:
 				annowts = {}
 				for dest in wts.keys():
 					byts = wts[dest]
@@ -604,19 +603,20 @@ class GraphManager(object):
 					fullname = ' \n'.join([x for x in (node,fqname,whoname,city,country) if x > ''])
 					annowts[fullname] = byts
 				nn = len(annowts.keys())
-				destfqlist = annowts.keys()
-				longname = ' '.join([x for x in (node,fqname,whoname,city,country) if x > ''])
-				wc = WordCloud(background_color="black",width=1200, height=1000,max_words=200,
-				 min_font_size=20, color_func = self.random_color_func).generate_from_frequencies(annowts)
-				f = plt.figure(figsize=(10, 10))
-				plt.imshow(wc, interpolation='bilinear')
-				plt.axis('off')
-				plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
-				ofss = outfname.split('destwordcloud') # better be there
-				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
-				f.savefig(ofn, bbox_inches='tight')
-				self.logger.info('Wrote wordcloud with %d entries for %s' % (nn,longname))
-				plt.close(f) 
+				if nn > 2:
+					destfqlist = annowts.keys()
+					longname = ' '.join([x for x in (node,fqname,whoname,city,country) if x > ''])
+					wc = WordCloud(background_color="black",width=1200, height=1000,max_words=200,
+					 min_font_size=20, color_func = self.random_color_func).generate_from_frequencies(annowts)
+					f = plt.figure(figsize=(10, 10))
+					plt.imshow(wc, interpolation='bilinear')
+					plt.axis('off')
+					plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
+					ofss = outfname.split('destwordcloud') # better be there
+					ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
+					f.savefig(ofn, bbox_inches='tight')
+					self.logger.info('Wrote wordcloud with %d entries for %s' % (nn,longname))
+					plt.close(f) 
 				
 				
 	def oldwordClouds(self,outfname,protoc):
