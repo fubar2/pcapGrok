@@ -82,7 +82,6 @@ def doLayer(layer, packets,fname,args, gM):
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
-		print('drew',ofn)
 		if layer == 3 and not args.wordcloudsOFF:
 			if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
 				pathlib.Path(os.path.join(args.outpath,'wordclouds')).mkdir(parents=True, exist_ok=True)
