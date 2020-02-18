@@ -89,7 +89,7 @@ class parDNS():
 		self.geo_ip = geo_ip
 		self.geo_lang = geo_lang
 		self.logger = logging.getLogger('pardns')
-		self.logger.setLevel(logger.DEBUG)
+		self.logger.setLevel(logging.DEBUG)
 
 
 		
