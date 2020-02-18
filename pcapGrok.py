@@ -88,6 +88,8 @@ def doLayer(layer, packets,fname,args, gM):
 			ofn = '%s_destwordcloud_layer%d_%s_%s' % ('All',layer,title.replace('+','_'),args.pictures)
 			if args.outpath:
 				ofn = os.path.join(args.outpath,'wordclouds',ofn)
+				if not (os.path.exists(ofn)):
+					pathlib.Path(ofn).mkdir(parents=True, exist_ok=True)
 			gM.wordClouds(ofn,"All")
 			logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
 
