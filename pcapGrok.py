@@ -83,8 +83,6 @@ def doLayer(layer, packets,fname,args, gM):
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
 		if layer == 3 and not args.wordcloudsOFF and args.pictures:
-			if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
-				pathlib.Path(os.path.join(args.outpath,'wordclouds')).mkdir(parents=True, exist_ok=True)
 			ofn = '%s_destwordcloud_layer%d_%s_%s' % ('All',layer,title.replace('+','_'),args.pictures)
 			gM.wordClouds(ofn,"All")
 			logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
@@ -104,13 +102,9 @@ def doLayer(layer, packets,fname,args, gM):
 						gM.draw(filename = pofn)
 						logger.debug('drew %s %d nodes' % (pofn,nn))
 						if layer == 3 and not args.wordcloudsOFF:
-							if not (os.path.exists(os.path.join(args.outpath,'wordclouds'))):
-								pathlib.Path(os.path.join(args.outpath,'wordclouds')).mkdir(parents=True, exist_ok=True)
 							pofn = '%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
-							if args.outpath:
-								pofn = os.path.join(args.outpath,'wordclouds',pofn)
 							gM.wordClouds(pofn,kind)
-							logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,ofn))
+							logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,pofn))
 					else:
 						logger.critical('found %d nodes so not a very worthwhile graph' % nn)
 	if args.frequent_in:
@@ -138,6 +132,10 @@ def checkmacs(packets):
 				s = str(dhcpo)
 				logger.info('#### found dhcp info = %s' % s)
 	dhcpf.close()
+	ik = len(ip_macdict.keys())
+	mk = len(ip_macdict.keys())
+	if ik != mk:
+		logger.warning('!!!! length mismatch ip_macdict (%d) and mac_ipdict (%d). Is there mac spoofing going on?' % (ik,lk))
 	return(ip_macdict,mac_ipdict)
 
 
@@ -463,6 +461,9 @@ if __name__ == '__main__':
 		if args.outpath:
 			if not (os.path.exists(args.outpath)):
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
+			if args.pictures: # some drawing so make wordclouds dir
+				wd = os.path.join(args.outpath,'wordclouds')
+				pathlib.Path(wd).mkdir(parents=True, exist_ok=True)
 			logging.basicConfig(filename=os.path.join(args.outpath,logFileName),filemode='w')
 		else:
 			logging.basicConfig(filename=logFileName,filemode='w')

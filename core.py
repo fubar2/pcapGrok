@@ -69,9 +69,9 @@ MULTIMAC = "01:00:5e"
 UNIMAC = "00:00:5e"
 BROADCASTMAC = "ff:ff:ff:ff:ff:ff"
 ROUTINGDISCOVERY = "224.0.0."
-ALLBC = ['multicast','igmp','unicast','broadcast','broadcasthost',"routingdiscovery"]
+ALLBC = ['multicast','linklocal_ip','loopback_ip','reserved_ip','unspecified_ip',"local_lan_ip"]
 
-PRIVATE = 'Local'
+PRIVATE = 'LAN'
 
 NTHREADS=250
 
@@ -106,10 +106,16 @@ class parDNS():
 			iptrim = ip
 			if len(ns) <= 2:
 				iptrim = ns[0]
+				if iptrim.lower() in ['0.0.0.0','ff.ff.ff.ff','255.255.255.255']:
+					whoname = PRIVATE
+					fqdname = 'Broadcast'			
 			elif len(ns) == 6: # mac
 				iptrim = None
-				whoname = PRIVATE		
-			if iptrim != None:
+				whoname = 'MAC'
+				fqdname = ip
+				mymac = ip
+			ipa = None
+			if iptrim != None and fqdname == None: # not broadcast
 				try:
 					ipa = ipaddress.ip_address(iptrim)
 				except:
@@ -117,7 +123,7 @@ class parDNS():
 					self.logger.debug('ip %s not convertable to ipaddress in lookup' % ip)
 				if ipa != None:
 					if ipa.is_multicast:
-						whoname = PRIVATE
+						whoname = 'Multicast'
 						fqdname = 'Multicast_IP'
 					if ipa.is_link_local:
 						whoname = PRIVATE
@@ -134,8 +140,8 @@ class parDNS():
 					if ipa.is_private:
 						whoname = PRIVATE
 						fqdname = 'Local_LAN_IP'
-			if whoname == None: # not yet found so try lookup	
-				if not ipa.is_global:
+			if whoname == None: # not yet found and not mac	
+				if ipa != None and ipa.is_global:
 					self.logger.debug('??? ip %s is not global, but no whoname after checking?' % ip)
 				if iptrim != None:
 					fqdname = socket.getfqdn(iptrim)
@@ -159,8 +165,6 @@ class parDNS():
 								city =  cityrec['names'].get(self.geo_lang,None)
 						else:
 							self.logger.error("could not load GeoIP data for ip %s" % iptrim)
-					else:
-						self.logger.error("!!! odd, iptrim=%s but whoname = %s" % (iptrim,whoname))
 			else:
 				self.logger.debug('ip %s has whoname %s and is not a global address so no lookups' % (ip,whoname))
 			ddict['city'] = city
@@ -476,9 +480,10 @@ class GraphManager(object):
 			ip = snode
 			ddict = self.dnsCACHE.get(snode,None)
 			if ddict == None:
-				self.logger.debug('Odd. No dnsCACHE entry for snode %s, node %s in draw' % (snode,node))
 				ddict = copy.copy(emptyrec)
 				ddict['fqdname'] = ip
+				ddict['ip'] = ip
+					
 			node.attr['shape'] = self.args.shape
 			node.attr['font.family'] = 'sans-serif'
 			node.attr['font.sans-serif'] = ['Verdana']
@@ -492,12 +497,13 @@ class GraphManager(object):
 			fqdname = ddict['fqdname']
 			mac = ddict['mac']
 			whoname = ddict['whoname']
-			if whoname != PRIVATE:
-				node.attr['color'] = 'violet' # remote hosts
-				node.attr['fontcolor'] = 'darkviolet'
-			if ddict['fqdname'].lower() in ALLBC:
-				node.attr['color'] = 'yellowgreen' # broad/multicast/igmp
-				node.attr['fontcolor'] = 'darkgreen' # broad/multicast/igmp
+			ips = ip.split(':')
+			if len(ips) <= 2:
+				lookupip = ips[0]
+				lookupa = ipaddress.ip_address(lookupip)
+				if lookupa.is_global:
+					node.attr['color'] = 'violet' # remote hosts
+					node.attr['fontcolor'] = 'darkviolet'
 			nodelabel = [node,]
 			if fqdname > '' and fqdname != ip:
 				nodelabel.append('\n')
@@ -505,7 +511,7 @@ class GraphManager(object):
 			if city > '' or country > '':
 				nodelabel.append('\n')
 				nodelabel.append('%s %s' % (city,country))
-			if whoname > '' and whoname != PRIVATE:
+			if whoname > '' : ### and whoname != PRIVATE:
 				nodelabel.append('\n')
 				if len(whoname) > 30:
 					l = len(whoname)
@@ -582,14 +588,14 @@ class GraphManager(object):
 				annowts = {}
 				for dest in wts.keys():
 					byts = wts[dest]
-					dnrec = self.dnsCACHE.get(snode,None)
+					dnrec = self.dnsCACHE.get(dest,None)
 					if dnrec:
 						fqname = dnrec['fqdname']
 						whoname = dnrec['whoname']
 						city = dnrec['city']
 						country = dnrec['country']
 					else:
-						fqname = node
+						fqname = dest
 						whoname = ''
 						city = ''
 						country = ''
@@ -606,12 +612,15 @@ class GraphManager(object):
 					plt.imshow(wc, interpolation='bilinear')
 					plt.axis('off')
 					plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
-					ofss = outfname.split('destwordcloud') # better be there
-					ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
+					ofn = outfname
+					if self.args.outpath:
+						ofn = os.path.join(self.args.outpath,'wordclouds',ofn)
 					f.savefig(ofn, bbox_inches='tight')
-					self.logger.info('Wrote wordcloud with %d entries for %s' % (nn,longname))
+					self.logger.info('Wrote wordcloud with %d entries for %s to %s' % (nn,longname,ofn))
 					plt.close(f) 
-				
+				else:
+					self.logger.debug('2 or fewer weights for node %s' % (snode))
+			self.logger.debug('No weights for node %s' % (snode))				
 				
 	def oldwordClouds(self,outfname,protoc):
 		ipfq = {}
