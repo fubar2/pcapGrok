@@ -150,7 +150,7 @@ def checkmacs(packets):
 		if l > maxips:
 			maxips = l
 			maxmac = mac
-	logger.info('mac = %s, has %s. Is it your router (or if only a few, new dhcp assigned IPs)' % (maxmac,mac_ipdict[maxmac]))
+	logger.debug('mac = %s, has %s. Is it your router (or if only a few, new dhcp assigned IPs)' % (maxmac,mac_ipdict[maxmac]))
 	return(ip_macdict,mac_ipdict)
 
 
