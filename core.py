@@ -517,7 +517,7 @@ class GraphManager(object):
 		#graph.draw(filename)
 		dotfilename = '%s.dot' % filename
 		graph.write(dotfilename)
-		os.system('sfdp -x -Goverlap=scale -Tpdf %s > %s' % (dotfilename,filename))
+		os.system('%s -x -Goverlap=scale -Tpdf %s > %s' % (self.args.layoutengine,dotfilename,filename))
 		os.system('rm %s' % dotfilename)
 		self.agraph = graph
 

@@ -18,12 +18,12 @@ capture files. A 6MB pcap file with 14K packets, 11 MAC addresses and 34 IP addr
 However, a 100MB pcap with about 70k packets requires about 2G of RAM to process and as the graphs become more complex, correspondingly more RAM
 will be used. It might work for a 1G file if you have a boatload of RAM but I cannot imagine what use a complex graph will be. It was 
 not designed for large pcap files so please don't be surprised if it doesn't cope with really big graphs. You'll be wanting the whole
-elastic backend thing with Securityonion or Malcolm for that. This is a toy by comparison but one that works fine for the small files needed to
+elastic backend thing with SecurityOnion or Malcolm for that. This is a toy by comparison but one that works fine for the small files needed to
 disect newly configured IoT devices.
 
 ## Purposes
-Network communication graphs show hosts as nodes and communication as edges, making complex relationships easier to see. 
-However, ip and mac addresses are hard to figure out unless additional information about the host is provided such as whois and domain name if available.
+Network communication graphs show hosts as nodes and traffic as edges, making complex communications easier to understand sometimes. 
+However, ip and mac addresses are for machines. Humans need additional information about the host such as country, domain registration and domain name if available.
 Scapy has some inbuilt visualisations and they can probably be applied to filtered data but we wanted finer control over the graph layout and decent annotation of each node.
 Seeing the packets at different layers is a good first level clarification and PcapVis provided the basis for this application. Mateusz' insight 
 made PcapVis images far more comprehensible to me because drawing the information flows separately for each of three layers makes much more immediate sense.
