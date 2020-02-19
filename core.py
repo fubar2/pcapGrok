@@ -80,13 +80,12 @@ class parDNS():
 	filter with ipaddress module
 	"""
 
-	def __init__(self,lookmeup,privates,ip_macdict,geo_ip,geo_lang):
+	def __init__(self,lookmeup,ip_macdict,geo_ip,geo_lang):
 		self.lookmeup = lookmeup
 		self.drec =  {'ip':'','fqdname':'','whoname':'','city':'','country':'','mac':''}
 		self.drecs = {}
 		self.dnsq_lock = threading.Lock()
 		self.dnsq = Queue()
-		self.privates = privates
 		self.ip_macdict = ip_macdict
 		self.geo_ip = geo_ip
 		self.geo_lang = geo_lang
@@ -115,14 +114,11 @@ class parDNS():
 					ipa = ipaddress.ip_address(iptrim)
 				except:
 					ipa == None
-				if ipa:
-					if ipa.is_local:
-						whoname = PRIVATE
-						fqdname = 'LocalNetwork'
+				if ipa != None:
 					if ipa.is_multicast:
 						whoname = PRIVATE
 						fqdname = 'Multicast'
-					if ipa.is_link_local or ipa.is_private:
+					if ipa.is_link_local:
 						whoname = PRIVATE
 						fqdname = 'LinkLocal'
 					if ipa.is_loopback:
@@ -137,6 +133,10 @@ class parDNS():
 					if ipa.is_unspecified:
 						whoname = PRIVATE
 						fqdname = 'Unspecified'
+					if ipa.is_private:
+						whoname = PRIVATE
+						fqdname = 'Private'
+						 
 			if whoname == '': # not yet found so try lookup		
 				if ip > '' and not (':' in ip):
 					fqdname = socket.getfqdn(ip)
@@ -327,7 +327,7 @@ class GraphManager(object):
 			else:
 				ip = node # might be ipv6 or mac - use as key
 		if len(lookmeup) > 0:
-			fastdns = parDNS(lookmeup,self.privates,self.ip_macdict,self.geo_ip,self.geo_lang)
+			fastdns = parDNS(lookmeup,self.ip_macdict,self.geo_ip,self.geo_lang)
 			drecs = fastdns.doRun()
 			kees = drecs.keys()
 			for k in kees:
