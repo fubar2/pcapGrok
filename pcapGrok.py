@@ -82,7 +82,7 @@ def doLayer(layer, packets,fname,args, gM):
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
 		if layer == 3 and not args.wordcloudsOFF and args.pictures:
-			pofn = 'All_%s_wordcloud_%s_%s' % (NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
+			pofn = 'wordclouds/All_%s_wordcloud_%s_%s' % (NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
 			if args.outpath:
 				pofn = os.path.join(args.outpath,pofn)
 			gM.wordClouds(pofn,"All")
@@ -103,7 +103,9 @@ def doLayer(layer, packets,fname,args, gM):
 						gM.draw(filename = pofn)
 						logger.debug('drew %s %d nodes' % (pofn,nn))
 						if not args.wordcloudsOFF and self.args.pictures:
-							pofn = '%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
+							pofn = 'wordlouds/%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
+							if args.outpath:
+								pofn = os.path.join(args.outpath,pofn)
 							gM.wordClouds(pofn,kind)
 							logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,pofn))
 					else:

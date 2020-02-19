@@ -611,8 +611,6 @@ class GraphManager(object):
 					plt.axis('off')
 					plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
 					ofn = outfname
-					if self.args.outpath:
-						ofn = os.path.join(self.args.outpath,'wordclouds',ofn)
 					f.savefig(ofn, bbox_inches='tight')
 					self.logger.info('Wrote wordcloud with %d entries for %s to %s' % (nn,longname,ofn))
 					plt.close(f) 
