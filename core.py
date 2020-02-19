@@ -671,8 +671,8 @@ class GraphManager(object):
 				plt.imshow(wc, interpolation='bilinear')
 				plt.axis('off')
 				plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
-				ofss = outfname.split('destwordcloud') # better be there
-				ofn = '%s%ddest_wordcloud_%s%s' % (ofss[0],nn,fqname,ofss[1])
+				ofnb = '%s%d_%s_%s' % (fqname,nn,outfname)
+				ofn = os.path.join(args.outpath,ofn)
 				f.savefig(ofn, bbox_inches='tight')
 				plt.close(f) 
 

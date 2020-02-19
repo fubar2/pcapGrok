@@ -34,7 +34,7 @@ mac_ipdict = {}
 parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
 parser.add_argument('-a', '--append', action='store_true',default=False, required=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
 parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP',required=False)
-parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method. One of sfdp, fdp, circo, neato, twopi or dot',required=True)
+parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method. One of sfdp, fdp, circo, neato, twopi or dot',required=False)
 parser.add_argument('-fi', '--frequent-in', action='store_true', help='Print frequently contacted nodes to stdout',required=False)
 parser.add_argument('-fo', '--frequent-out', action='store_true', help='Print frequent source nodes to stdout',required=False)
 parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)',required=False)
@@ -76,36 +76,38 @@ def doLayer(layer, packets,fname,args, gM):
 		return copy.copy(gM.dnsCACHE)
 	if args.pictures:
 		title = gM.filesused
-		gM.glabel = 'Layer %s using packets from %s' % (NAMEDLAYERS[layer],gM.filesused)
-		ofn = '%s_layer%d_%s' % (title.replace('+','_'),layer,args.pictures)
+		gM.glabel = '%s layer in packets from %s' % (NAMEDLAYERS[layer],gM.filesused)
+		ofn = '%s_%s_%s' % (title.replace('+','_'),NAMEDLAYERS[layer],args.pictures)
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
 		if layer == 3 and not args.wordcloudsOFF and args.pictures:
-			ofn = '%s_destwordcloud_layer%d_%s_%s' % ('All',layer,title.replace('+','_'),args.pictures)
-			gM.wordClouds(ofn,"All")
+			pofn = 'All_%s_wordcloud_%s_%s' % (NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
+			if args.outpath:
+				pofn = os.path.join(args.outpath,pofn)
+			gM.wordClouds(pofn,"All")
 			logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
 
-		if nn > args.nmax and layer == 4:
+		if nn > args.nmax and layer == 3:
 			logger.warning('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
 			for kind in llook.keys():
 				subset = [x for x in packets if x != None and x.haslayer(kind)]  
 				if len(subset) > 0:
 					gM.reset(subset,layer,glabel)
 					nn = len(gM.graph.nodes())
-					if nn > 1:
-						pofn = '%s_layer%d_%s_%s' % (kind,layer,title,args.pictures)
+					if nn > 2:
+						pofn = '%s_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
 						if args.outpath:
 							pofn = os.path.join(args.outpath,pofn)
 						gM.glabel = '%s only, %s layer, using packets from %s' % (kind,NAMEDLAYERS[layer],gM.filesused)
 						gM.draw(filename = pofn)
 						logger.debug('drew %s %d nodes' % (pofn,nn))
-						if layer == 3 and not args.wordcloudsOFF:
+						if not args.wordcloudsOFF and self.args.pictures:
 							pofn = '%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
 							gM.wordClouds(pofn,kind)
 							logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,pofn))
 					else:
-						logger.critical('found %d nodes so not a very worthwhile graph' % nn)
+						logger.debug('found %d nodes so not a very worthwhile graph' % nn)
 	if args.frequent_in:
 		gM.get_in_degree()
 	if args.frequent_out:
