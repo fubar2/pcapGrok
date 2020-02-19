@@ -69,7 +69,7 @@ MULTIMAC = "01:00:5e"
 UNIMAC = "00:00:5e"
 BROADCASTMAC = "ff:ff:ff:ff:ff:ff"
 ROUTINGDISCOVERY = "224.0.0."
-ALLBC = ['multicast','linklocal_ip','loopback_ip','reserved_ip','unspecified_ip',"local_lan_ip"]
+ALLBC = ['multicast_ip','linklocal_ip','loopback_ip','reserved_ip','unspecified_ip',"local_lan_ip","broadcast"]
 
 PRIVATE = 'LAN'
 
@@ -568,18 +568,25 @@ class GraphManager(object):
 					weights[src][dest] = tb
 		for node in graph.nodes():
 			snode = str(node)
-			dnrec = self.dnsCACHE.get(snode,None)
+			ssnode = snode.split(':')
+			if len(ssnode) <= 2:
+				ip = ssnode[0]
+				dnrec = self.dnsCACHE.get(ip,None)
+			else:
+				dnrec = self.dnsCACHE.get(snode,None)
 			if dnrec:
 				fqname = dnrec['fqdname']
 				whoname = dnrec['whoname']
 				city = dnrec['city']
 				country = dnrec['country']
+				ip = dnrec['ip']
 			else:
 				self.logger.warning('Odd: no dnsCACHE record for node %s found in wordcloud generation' % (snode))
 				fqname = node
 				whoname = ''
 				city = ''
 				country = ''
+				ip = ''
 			wts = weights.get(snode,None)
 			if wts:
 				annowts = {}
@@ -587,22 +594,28 @@ class GraphManager(object):
 					byts = wts[dest]
 					dnrec = self.dnsCACHE.get(dest,None)
 					if dnrec:
-						fqname = dnrec['fqdname']
-						whoname = dnrec['whoname']
-						city = dnrec['city']
-						country = dnrec['country']
+						annoip = dnrec['ip']
+						annofqname = dnrec['fqdname']
+						annowhoname = dnrec['whoname']
+						annocity = dnrec['city']
+						annocountry = dnrec['country']
 					else:
-						fqname = dest
-						whoname = ''
-						city = ''
-						country = ''
-
-					fullname = ' \n'.join([x for x in (node,fqname,whoname,city,country) if x > ''])
+						annoip = dest
+						annofqname = dest
+						annowhoname = ''
+						annocity = ''
+						annocountry = ''
+					if annofqname.lower() in ALLBC:
+						fullname = ' '.join([x[:15] for x in (annoip,annofqname,annowhoname) if x > ''])
+					else:
+						fullname = ' '.join([x[:15] for x in (annofqname,annowhoname,annocity) if x > ''])
 					annowts[fullname] = byts
 				nn = len(annowts.keys())
 				if nn > 2:
-					destfqlist = annowts.keys()
-					longname = ' '.join([x for x in (node,fqname,whoname,city,country) if x > ''])
+					if fqname.lower() in ALLBC:
+						longname = ' '.join([x[:15] for x in (ip,fqname,whoname) if x > ''])
+					else:
+						longname = ' '.join([x[:15] for x in (fqname,whoname,city) if x > ''])
 					wc = WordCloud(background_color="black",width=1200, height=1000,max_words=200,
 					 min_font_size=20, color_func = self.random_color_func).generate_from_frequencies(annowts)
 					f = plt.figure(figsize=(10, 10))

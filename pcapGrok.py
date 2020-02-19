@@ -117,31 +117,31 @@ def doLayer(layer, packets,fname,args, gM):
 
 def checkmacs(packets):
 	"""best to determine mac/ip associations for local hosts before filtering on layer - layer4 changes the packet....
+	is there mac spoofery?
 	"""
 	dhcpf = open(DHCPDUMP_FILE,'w')
 	for packet in packets:
 		macs = packet[0].src.lower()
 		if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
 			ips = packet[1].src.lower()
-			if ip_macdict.get(ips,None): # exists - of interest
+			existmac =  ip_macdict.get(ips,None)
+			if existmac == None:
+				ip_macdict[ips] = [macs,]
+			elif not (macs in existmac): # newly spoofed - of interest
 				ip_macdict[ips].append(macs)
 				logger.critical('#### Possible MAC SPOOFING - >1 mac for ip = %s, now has %s' % (ips,ip_macdict[ips]))
-			else:
-				ip_macdict[ips] = [macs,]
-			if mac_ipdict.get(macs,None): # exists - of interest
-				mac_ipdict[macs].append(ips)
-				logger.critical('#### New ip for mac = %s, now has %s - this might be a new dhcp assigned IP for an existing device' % (macs,mac_ipdict[macs]))
-			else:
-				ip_macdict[macs] = [ips,]
+			existip = mac_ipdict.get(macs,None)
+			if existip == None:
+				mac_ipdict[macs] = [ips,]	
+			elif not (ips in existip): # new one ? - of interest
+					mac_ipdict[macs].append(ips)
+					logger.critical('#### New ip for mac = %s, now has %s - this might be a new dhcp assigned IP for an existing device' % (macs,mac_ipdict[macs]))
 			if packet.haslayer(DHCP) : # for kyd
 				dhcpp = packet.getlayer(DHCP)
 				dhcpo = dhcpp.options
 				s = str(dhcpo)
 				logger.info('#### found dhcp info = %s' % s)
 	dhcpf.close()
-	# is there mac spoofery?
-	if ik != mk:
-		logger.warning('!!!! length mismatch ip_macdict (%d) and mac_ipdict (%d). Is there mac spoofing going on?' % (ik,lk))
 	return(ip_macdict,mac_ipdict)
 
 
@@ -267,7 +267,7 @@ def readDnsCache(dnsCACHEfile,dnsCACHE):
 				rest[tk] = row[i]
 			if len(k.split(':')) == 6: # mac?
 				if rest['mac'] == '':
-					rest['mac'] = k
+					rest['mac'] = k.lower()
 				else:
 					rest['mac'] = rest['mac'].lower()
 			if rest['whoname'] != PRIVATE and rest['whoname'] > '':
