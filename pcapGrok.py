@@ -132,7 +132,7 @@ def checkmacs(packets):
 				mac_ipdict[macs].append(ips)
 				logger.critical('#### New ip for mac = %s, now has %s - this might be a new dhcp assigned IP for an existing device' % (macs,mac_ipdict[macs]))
 			else:
-				ip_macdict[mac] = [ips,]
+				ip_macdict[macs] = [ips,]
 			if packet.haslayer(DHCP) : # for kyd
 				dhcpp = packet.getlayer(DHCP)
 				dhcpo = dhcpp.options
