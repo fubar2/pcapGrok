@@ -496,7 +496,7 @@ class GraphManager(object):
 			if city > '' or country > '':
 				nodelabel.append('\n')
 				nodelabel.append('%s %s' % (city,country))
-			if whoname > '' : ### and whoname != PRIVATE:
+			if whoname != None and whoname > '' : ### and whoname != PRIVATE:
 				nodelabel.append('\n')
 				if len(whoname) > 30:
 					l = len(whoname)
