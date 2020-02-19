@@ -321,11 +321,12 @@ class GraphManager(object):
 		"""parallel all (slow!) fqdn reverse dns lookups from ip"""
 		lookmeup = [] # parallel for ip not in cache yet
 		for node in self.graph.nodes:
+			ns = node.split(':')
+			if len(ns) == 6: # mac
+				continue # no point
 			ddict = self.dnsCACHE.get(node,None) # index is unadorned ip or mac
 			if ddict == None:
 				lookmeup.append(node)
-			else:
-				ip = node # might be ipv6 or mac - use as key
 		if len(lookmeup) > 0:
 			fastdns = parDNS(lookmeup,self.ip_macdict,self.geo_ip,self.geo_lang)
 			drecs = fastdns.doRun()
