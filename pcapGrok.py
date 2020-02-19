@@ -25,7 +25,7 @@ IPBROADCAST = '0.0.0.0'
 MACBROADCAST = 'ff:ff:ff:ff:ff:ff'
 PRIVATE = 'Local'
 SEPCHAR = ','
-NAMEDLAYERS = ['bogus','bugusser','Ether','IP','TCP/UDP']
+NAMEDLAYERS = ['bogus','bugusser','Link','Network','Transport']
 ip_macdict = {}
 mac_ipdict = {}
 
