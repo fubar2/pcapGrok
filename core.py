@@ -594,9 +594,9 @@ class GraphManager(object):
 						annocity = ''
 						annocountry = ''
 					if annofqname.lower() in ALLBC:
-						fullname = ' '.join([x[:15] for x in (annoip,annofqname,annowhoname) if x > ''])
+						fullname = ' '.join([x[:15] for x in (annoip,annofqname,annowhoname) if x and x > ''])
 					else:
-						fullname = ' '.join([x[:15] for x in (annofqname,annowhoname,annocity) if x > ''])
+						fullname = ' '.join([x[:15] for x in (annofqname,annowhoname,annocity) if x and x > ''])
 					annowts[fullname] = byts
 				nn = len(annowts.keys())
 				if nn > 2:
