@@ -49,7 +49,6 @@ parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
 parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
 parser.add_argument('-p', '--pictures', default=None, help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
-parser.add_argument('-P', '--paralleldnsOFF', action='store_true',default=False, help='Turn OFF threading for parallel dns/whois queries. Default is to use threading')
 parser.add_argument('-S', '--squishportsON', action='store_true',default=False, help='Turn ON layer4 port squishing to simplify networks by ignoring ports - effectively same as IP layer?')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
@@ -124,16 +123,23 @@ def checkmacs(packets):
 		macs = packet[0].src.lower()
 		if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
 			ips = packet[1].src.lower()
-			ip_macdict[ips] = macs
-			mac_ipdict[macs] = ips
+			if ip_macdict.get(ips,None): # exists - of interest
+				ip_macdict[ips].append(macs)
+				logger.critical('#### Possible MAC SPOOFING - >1 mac for ip = %s, now has %s' % (ips,ip_macdict[ips]))
+			else:
+				ip_macdict[ips] = [macs,]
+			if mac_ipdict.get(macs,None): # exists - of interest
+				mac_ipdict[macs].append(ips)
+				logger.critical('#### New ip for mac = %s, now has %s - this might be a new dhcp assigned IP for an existing device' % (macs,mac_ipdict[macs]))
+			else:
+				ip_macdict[mac] = [ips,]
 			if packet.haslayer(DHCP) : # for kyd
 				dhcpp = packet.getlayer(DHCP)
 				dhcpo = dhcpp.options
 				s = str(dhcpo)
 				logger.info('#### found dhcp info = %s' % s)
 	dhcpf.close()
-	ik = len(ip_macdict.keys())
-	mk = len(ip_macdict.keys())
+	# is there mac spoofery?
 	if ik != mk:
 		logger.warning('!!!! length mismatch ip_macdict (%d) and mac_ipdict (%d). Is there mac spoofing going on?' % (ik,lk))
 	return(ip_macdict,mac_ipdict)

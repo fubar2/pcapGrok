@@ -115,7 +115,7 @@ class parDNS():
 				fqdname = ip
 				mymac = ip
 			ipa = None
-			if iptrim != None and fqdname == None: # not broadcast
+			if iptrim != None and fqdname == '': # not broadcast
 				try:
 					ipa = ipaddress.ip_address(iptrim)
 				except:
@@ -140,31 +140,28 @@ class parDNS():
 					if ipa.is_private:
 						whoname = PRIVATE
 						fqdname = 'Local_LAN_IP'
-			if whoname == None: # not yet found and not mac	
-				if ipa != None and ipa.is_global:
-					self.logger.debug('??? ip %s is not global, but no whoname after checking?' % ip)
-				if iptrim != None:
-					fqdname = socket.getfqdn(iptrim)
-					try:
-						who = IPWhois(iptrim)
-						qry = who.lookup_rdap(depth=1)
-						whoname = qry['asn_description']
-					except Exception as e:
-						whoname = PRIVATE
-						with self.dnsq_lock: # make sure no race
-							self.logger.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (iptrim,e))
-					fullname = '%s\n%s' % (fqdname,whoname)
-					if iptrim > '' and self.geo_ip and whoname != PRIVATE:			
-						mmdbrec = self.geo_ip.get(iptrim)
-						if mmdbrec != None:
-							countryrec = mmdbrec.get('country',None)
-							cityrec = mmdbrec.get('city',None)
-							if countryrec: # some records have one but not the other....
-								country = countryrec['names'].get(self.geo_lang,None)
-							if cityrec:
-								city =  cityrec['names'].get(self.geo_lang,None)
-						else:
-							self.logger.error("could not load GeoIP data for ip %s" % iptrim)
+			if whoname == None and ipa != None and ipa.is_global: # not yet found and not mac	
+				fqdname = socket.getfqdn(iptrim)
+				try:
+					who = IPWhois(iptrim)
+					qry = who.lookup_rdap(depth=1)
+					whoname = qry['asn_description']
+				except Exception as e:
+					whoname = PRIVATE
+					with self.dnsq_lock: # make sure no race
+						self.logger.debug('#### IPwhois failed ?timeout? for ip = %s = %s' % (iptrim,e))
+				fullname = '%s\n%s' % (fqdname,whoname)
+				if iptrim > '' and self.geo_ip and whoname != PRIVATE:			
+					mmdbrec = self.geo_ip.get(iptrim)
+					if mmdbrec != None:
+						countryrec = mmdbrec.get('country',None)
+						cityrec = mmdbrec.get('city',None)
+						if countryrec: # some records have one but not the other....
+							country = countryrec['names'].get(self.geo_lang,None)
+						if cityrec:
+							city =  cityrec['names'].get(self.geo_lang,None)
+					else:
+						self.logger.error("could not load GeoIP data for ip %s" % iptrim)
 			else:
 				self.logger.debug('ip %s has whoname %s and is not a global address so no lookups' % (ip,whoname))
 			ddict['city'] = city
@@ -173,8 +170,8 @@ class parDNS():
 			ddict['fqdname'] = fqdname
 			ddict['mac'] = mymac
 			with self.dnsq_lock: # make sure no race
-				self.drecs[ip] = ddict
-				self.logger.debug('fast got city country %s,%s fqdname %s for ip %s' % (city,country,ddict['fqdname'],ip))
+				self.drecs[iptrim] = ddict
+				self.logger.debug('fast got city country %s,%s fqdname %s for ip %s' % (city,country,ddict['fqdname'],iptrim))
 		
 	def threader(self):
 		while True:
@@ -228,7 +225,7 @@ class GraphManager(object):
 		self.mac_ipdict = mac_ipdict
 		self.dnsCACHE = dnsCACHE
 		self.squishPorts = args.squishportsON == True
-		self.parallelDNS = args.paralleldnsOFF == False
+		
 
 		
 	
@@ -276,11 +273,7 @@ class GraphManager(object):
 				self.graph.add_edge(src, dst)
 				self.graph[src][dst]['packets'] = [packet]
 
-		if self.parallelDNS:
-			self._fast_retrieve_node_info()
-		else:
-			for node in self.graph:
-				self._retrieve_node_info(node)
+		self._fast_retrieve_node_info()
 
 		for src, dst in self.graph.edges():
 			self._retrieve_edge_info(src, dst)
@@ -326,11 +319,14 @@ class GraphManager(object):
 		lookmeup = [] # parallel for ip not in cache yet
 		for node in self.graph.nodes:
 			ns = node.split(':')
+			ip = ns[0]
+			if len(ns) == 8:
+				ip = ns # ipv6?
 			if len(ns) == 6: # mac
 				continue # no point
-			ddict = self.dnsCACHE.get(node,None) # index is unadorned ip or mac
+			ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
 			if ddict == None:
-				lookmeup.append(node)
+				lookmeup.append(ip)
 		if len(lookmeup) > 0:
 			fastdns = parDNS(lookmeup,self.ip_macdict,self.geo_ip,self.geo_lang)
 			drecs = fastdns.doRun()
@@ -476,14 +472,6 @@ class GraphManager(object):
 		graph.graph_attr['font.family'] = ['DejaVu Sans'] #['Tahoma', 'DejaVu Sans', 'Lucida Grande', 'Verdana']
 		graph.graph_attr['font.font'] = ['DejaVu Sans']
 		for node in graph.nodes():
-			snode = str(node)
-			ip = snode
-			ddict = self.dnsCACHE.get(snode,None)
-			if ddict == None:
-				ddict = copy.copy(emptyrec)
-				ddict['fqdname'] = ip
-				ddict['ip'] = ip
-					
 			node.attr['shape'] = self.args.shape
 			node.attr['font.family'] = 'sans-serif'
 			node.attr['font.sans-serif'] = ['Verdana']
@@ -492,18 +480,27 @@ class GraphManager(object):
 			node.attr['color'] = 'yellowgreen' # assume all are local hosts
 			node.attr['fontcolor'] = 'darkgreen'
 			node.attr['style'] = 'rounded' ## filled,
+			snode = str(node)
+			ssnode = snode.split(':')
+			if len(ssnode) <= 2:
+				ip = ssnode[0]
+				lookupa = ipaddress.ip_address(ip)
+				if lookupa.is_global:
+					node.attr['color'] = 'violet' # remote hosts
+					node.attr['fontcolor'] = 'darkviolet'
+			else:
+				ip = snode # ipv6 or mac
+			ddict = self.dnsCACHE.get(ip,None)
+			if ddict == None:
+				ddict = copy.copy(emptyrec)
+				ddict['fqdname'] = ip
+				ddict['ip'] = ip			
 			country = ddict['country']
 			city = ddict['city']
 			fqdname = ddict['fqdname']
 			mac = ddict['mac']
 			whoname = ddict['whoname']
 			ips = ip.split(':')
-			if len(ips) <= 2:
-				lookupip = ips[0]
-				lookupa = ipaddress.ip_address(lookupip)
-				if lookupa.is_global:
-					node.attr['color'] = 'violet' # remote hosts
-					node.attr['fontcolor'] = 'darkviolet'
 			nodelabel = [node,]
 			if fqdname > '' and fqdname != ip:
 				nodelabel.append('\n')
