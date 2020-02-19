@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 """
 ross lazarus december 2019 
 forked from mateuszk87/PcapViz
@@ -8,18 +8,6 @@ added CL parameters to adjust image layout and shapes
 added broadcast/igmp annotation
 added squishports to simplify layer4 networks so only 1 node per host for all ports
 
-For private networks use:
-
-	Range from 10.0.0.0 to 10.255.255.255 — a 10.0.0.0 network with a 255.0.0.0 or an /8 (8-bit) mask
-	Range from 172.16.0.0 to 172.31.255.255 — a 172.16.0.0 network with a 255.240.0.0 (or a 12-bit) mask
-	A 192.168.0.0 to 192.168.255.255 range, which is a 192.168.0.0 network masked by 255.255.0.0 or /16
-	A special range 100.64.0.0 to 100.127.255.255 with a 255.192.0.0 or /10 network mask; this subnet is recommended according to rfc6598 for use as an address pool for CGN (Carrier-Grade NAT)
-privateipstarts = ['10.',192.168.',]
-more = ["172.%d" % i for i in range(16,32)]
-privatestarts.append(more)
-more =  ["100.%d" % i for i in range(64,128)]
-privatestarts.append(more)	
-if any [x.startswith[y] for y in privateipstarts]: # is private
 """
 
 

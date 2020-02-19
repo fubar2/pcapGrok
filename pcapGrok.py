@@ -135,13 +135,22 @@ def checkmacs(packets):
 				mac_ipdict[macs] = [ips,]	
 			elif not (ips in existip): # new one ? - of interest
 					mac_ipdict[macs].append(ips)
-					logger.critical('#### New ip for mac = %s, now has %s - this might be a new dhcp assigned IP for an existing device' % (macs,mac_ipdict[macs]))
+					if len(mac_ipdict[macs])== 5: # only once
+						logger.debug('#### New ip for mac = %s, now has %s. Is it your router (or if only a few, new dhcp assigned IPs)' % (macs,mac_ipdict[macs]))
 			if packet.haslayer(DHCP) : # for kyd
 				dhcpp = packet.getlayer(DHCP)
 				dhcpo = dhcpp.options
 				s = str(dhcpo)
 				logger.info('#### found dhcp info = %s' % s)
 	dhcpf.close()
+	maxmac = None
+	maxips = -999
+	for mac in mac_ipdict.keys():
+		l = len(mac_ipdict[mac])
+		if l > maxips:
+			maxips = l
+			maxmac = mac
+	logger.info('mac = %s, has %s. Is it your router (or if only a few, new dhcp assigned IPs)' % (maxmac,mac_ipdict[maxmac]))
 	return(ip_macdict,mac_ipdict)
 
 
