@@ -298,10 +298,6 @@ class GraphManager(object):
 					print('\t'.join([str(sorted_degrees[i]),str(i), nn, f, w]))
 		return sorted_degrees
 
-	def isLocal(self,ip):
-		res = any ([ip.startswith(y) for y in self.privates]) # is private
-		return res
-
 	def _fast_retrieve_node_info(self):				
 		"""parallel all (slow!) fqdn reverse dns lookups from ip"""
 		lookmeup = [] # parallel for ip not in cache yet
@@ -327,83 +323,8 @@ class GraphManager(object):
 					self.logger.debug('## fast looked up %s and added %s' % (k,drecs[k]))
 		else:
 			self.logger.debug('_fast_retrieve_node found no ip addresses missing from dnsCACHE')
-		
 
 		
-	def _retrieve_node_info(self, node):				
-		"""cache all (slow!) fqdn reverse dns lookups from ip"""
-		drec = {'ip':'','fqdname':'','whoname':'','city':'','country':'','mac':''}
-		ns = node.split(':')
-		if len(ns) <= 2: # has a port - not a mac or ipv6 address
-			ip = ns[0]
-		else:
-			ip = node # might be ipv6 or mac - use as key
-		ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
-		if ddict == None: # never seen - ignore ports because annotation is always the same
-			ddict = copy.copy(drec)
-			ddict['ip'] = ip	
-			city = ''
-			country = ''
-			localip = self.isLocal(ip)
-			mymac = self.ip_macdict.get(ip,None)
-			if mymac and localip:
-				ddict['mac'] = mymac
-			if ip.startswith('240.0'): # is igmp
-				ddict['fqdname'] = 'Multicast'
-				ddict['whoname'] = 'IGMP'
-			if ip.startswith(MULTIMAC):
-				ddict['fqdname'] = 'Multicast'
-				ddict['whoname'] = 'IGMP'
-			elif ip.startswith(UNIMAC):
-				ddict['fqdname'] = 'Unicast'
-				ddict['whoname'] = 'IGMP'
-			elif ip == BROADCASTMAC:
-				ddict['fqdname'] = 'Broadcast'
-				ddict['whoname'] = 'Local'
-			elif ip.startswith(ROUTINGDISCOVERY):
-				ddict['fqdname'] = 'Routingdiscovery'
-				ddict['whoname'] = 'Local'
-			elif ip == '0.0.0.0':
-				ddict['whoname'] = 'Local'
-			elif localip:
-				ddict['whoname'] = 'Local'
-			else:
-				if ip > '' and not (':' in ip) and not localip:
-					fqdname = socket.getfqdn(ip)
-					ddict['fqdname'] = fqdname
-					try:
-						who = IPWhois(ip)
-						qry = who.lookup_rdap(depth=1)
-						whoname = qry['asn_description']
-					except Exception as e:
-						whoname = PRIVATE
-						self.logger.warning('#### IPwhois failed ?timeout? for ip = %s = %s' % (ip,e))
-					ddict['whoname'] = whoname
-					fullname = '%s\n%s' % (fqdname,whoname)
-				else:
-					ddict['fqdname'] = ''
-					if len(ns) == 6 and ddict['mac'] == '':
-						ddict['mac'] = ip
-				city = ''
-				country = ''
-				if ip > '' and self.geo_ip and ddict['whoname'] != PRIVATE and (':' not in ip):			
-					mmdbrec = self.geo_ip.get(ip)
-					if mmdbrec != None:
-						countryrec = mmdbrec.get('country',None)
-						cityrec = mmdbrec.get('city',None)
-						if countryrec: # some records have one but not the other....
-							country = countryrec['names'].get(self.args.geolang,None)
-						if cityrec:
-							city =  cityrec['names'].get(self.args.geolang,None)
-					else:
-						self.logger.error("could not load GeoIP data for ip %s" % ip)
-			ddict['city'] = city
-			ddict['country'] = country
-			self.dnsCACHE[node] = ddict
-			self.logger.info('## looked up %s and added %s' % (node,ddict))
-		
-
-
 	def _retrieve_edge_info(self, src, dst):
 		edge = self.graph[src][dst]
 		if edge:
@@ -459,6 +380,8 @@ class GraphManager(object):
 		graph.graph_attr['bgcolor'] = "#FFFFFFFF"
 		graph.graph_attr['font.family'] = ['DejaVu Sans'] #['Tahoma', 'DejaVu Sans', 'Lucida Grande', 'Verdana']
 		graph.graph_attr['font.font'] = ['DejaVu Sans']
+		graph.graph_attr['overlap'] = False
+		graph.graph_attr['splines'] = True
 		for node in graph.nodes():
 			node.attr['shape'] = self.args.shape
 			node.attr['font.family'] = 'sans-serif'

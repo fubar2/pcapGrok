@@ -49,7 +49,7 @@ parser.add_argument('--layer4', action='store_true', help='TCP/UDP message graph
 parser.add_argument('-n', '--nmax', default=100, help='Automagically draw individual protocols if more than --nmax nodes. 100 seems too many for any one graph.')
 parser.add_argument('-o', '--outpath', required=False, default = None, help='All outputs will be written to the supplied path. Default (if none supplied) is current working directory')
 parser.add_argument('-p', '--pictures', default=None, help='Image filename stub for all images - layers and protocols are prepended to make file names. Use (e.g.) .pdf or .png extension to specify the image type. PDF is best for large graphs')
-parser.add_argument('-S', '--squishportsON', action='store_true',default=False, help='Turn ON layer4 port squishing to simplify networks by ignoring ports - effectively same as IP layer?')
+parser.add_argument('-S', '--squishportsON', action='store_true',default=False, help='Turn ON layer4 port squishing to simplify networks by ignoring ports - effectively same as IP layer')
 parser.add_argument('-r', '--restrict', nargs='*', help='Whitelist of device mac addresses - restrict all graphs to traffic to or device(s). Specify mac address(es) as "xx:xx:xx:xx:xx:xx"')
 parser.add_argument('-s', '--shape', default='diamond', help='Graphviz node shape - circle, diamond, box etc.')
 parser.add_argument('-T', '--tsharkON', action='store_true',default=False, help='Turn tshark reports on')
@@ -81,35 +81,35 @@ def doLayer(layer, packets,fname,args, gM):
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
-		if layer == 3 and not args.wordcloudsOFF and args.pictures:
-			pofn = 'wordclouds/All_%s_wordcloud_%s_%s' % (NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
-			if args.outpath:
-				pofn = os.path.join(args.outpath,pofn)
-			gM.wordClouds(pofn,"All")
-			logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
-
-		if nn > args.nmax and layer == 3:
-			logger.warning('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
-			for kind in llook.keys():
-				subset = [x for x in packets if x != None and x.haslayer(kind)]  
-				if len(subset) > 0:
-					gM.reset(subset,layer,glabel)
-					nn = len(gM.graph.nodes())
-					if nn > 2:
-						pofn = '%s_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
-						if args.outpath:
-							pofn = os.path.join(args.outpath,pofn)
-						gM.glabel = '%s only, %s layer, using packets from %s' % (kind,NAMEDLAYERS[layer],gM.filesused)
-						gM.draw(filename = pofn)
-						logger.debug('drew %s %d nodes' % (pofn,nn))
-						if not args.wordcloudsOFF and self.args.pictures:
-							pofn = 'wordlouds/%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
+		if layer == 3:
+			if not args.wordcloudsOFF:
+				pofn = 'wordclouds/All_%s_wordcloud_%s_%s' % (NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
+				if args.outpath:
+					pofn = os.path.join(args.outpath,pofn)
+				gM.wordClouds(pofn,"All")
+				logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
+			if nn > args.nmax :
+				logger.warning('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
+				for kind in llook.keys():
+					subset = [x for x in packets if x != None and x.haslayer(kind)]  
+					if len(subset) > 0:
+						gM.reset(subset,layer,glabel)
+						nn = len(gM.graph.nodes())
+						if nn > 2:
+							pofn = '%s_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
 							if args.outpath:
 								pofn = os.path.join(args.outpath,pofn)
-							gM.wordClouds(pofn,kind)
-							logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,pofn))
-					else:
-						logger.debug('found %d nodes so not a very worthwhile graph' % nn)
+							gM.glabel = '%s only, %s layer, using packets from %s' % (kind,NAMEDLAYERS[layer],gM.filesused)
+							gM.draw(filename = pofn)
+							logger.debug('drew %s %d nodes' % (pofn,nn))
+							if not args.wordcloudsOFF:
+								pofn = 'wordlouds/%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
+								if args.outpath:
+									pofn = os.path.join(args.outpath,pofn)
+								gM.wordClouds(pofn,kind)
+								logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,pofn))
+						else:
+							logger.debug('found %d nodes so not a very worthwhile graph' % nn)
 	if args.frequent_in:
 		gM.get_in_degree()
 	if args.frequent_out:
