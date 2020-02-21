@@ -14,7 +14,7 @@ import logging
 import pathlib
 from datetime import datetime
 import sys
-
+import ipaddress
 DHCP_PORT = 67
 BOOT_REQ = 1
 
@@ -135,7 +135,7 @@ def checkmacs(packets):
 			except:
 				logger.critical('Got ip = %s - not valid' % (ips))
 				continue
-			if ipa.is_multicast or ips.lower() in ['0.0.0.0','ff.ff.ff.ff','255.255.255.255']:
+			if ipsa.is_multicast or ips.lower() in ['0.0.0.0','ff.ff.ff.ff','255.255.255.255']:
 				continue
 			existmac =  ip_macdict.get(ips,None)
 			if existmac == None:
