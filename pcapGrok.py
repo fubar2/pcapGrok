@@ -81,13 +81,14 @@ def doLayer(layer, packets,fname,args, gM):
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
+		logger.info('drew %s  to %s' % (gM.glabel,ofn))
 		if layer == 3:
 			if not args.wordcloudsOFF:
 				pofn = 'wordclouds/All_%s_wordcloud_%s_%s' % (NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
 				if args.outpath:
 					pofn = os.path.join(args.outpath,pofn)
 				gM.wordClouds(pofn,"All")
-				logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % ('All',ofn))
+				logger.info('drew %s wordcloud to %s' % ('All',pofn))
 			if nn > args.nmax :
 				logger.warning('Asked to draw %d nodes with --nmax set to %d. Will also do useful protocols separately' % (nn,args.nmax))
 				for kind in llook.keys():
@@ -101,15 +102,16 @@ def doLayer(layer, packets,fname,args, gM):
 								pofn = os.path.join(args.outpath,pofn)
 							gM.glabel = '%s only, %s layer, using packets from %s' % (kind,NAMEDLAYERS[layer],gM.filesused)
 							gM.draw(filename = pofn)
-							logger.debug('drew %s %d nodes' % (pofn,nn))
+							logger.debug('drew %s %d nodes to %s' % (gM.glabel,nn,pofn))
 							if not args.wordcloudsOFF:
-								pofn = 'wordclouds/%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
+								pofn = 'wordclouds/%s_wordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
 								if args.outpath:
 									pofn = os.path.join(args.outpath,pofn)
 								gM.wordClouds(pofn,kind)
-								logger.info('$$$$$$$$$$$ drew %s wordcloud to %s' % (kind,pofn))
+								logger.info('drew %s wordcloud to %s' % (kind,pofn))
 						else:
 							logger.debug('found %d nodes so not a very worthwhile graph' % nn)
+							
 	if args.frequent_in:
 		gM.get_in_degree()
 	if args.frequent_out:
@@ -126,7 +128,7 @@ def checkmacs(packets):
 	dhcpf = open(DHCPDUMP_FILE,'w')
 	for packet in packets:
 		macs = packet[0].src.lower()
-		if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
+		if packet.haslayer(IP):
 			ips = packet[1].src.lower()
 			try:
 				ipsa = ipaddress.ip_address(ips)
@@ -192,6 +194,7 @@ def doPcap(pin,args,filesused,dnsCACHE,gM):
 	logger.info(s)
 	print(s)
 	logger.info('$$$$ mac_ipdict = %s' % mac_ipdict)
+	logger.info('$$$$ ip_macdict = %s' % ip_macdict)
 	gM.ip_macdict = ip_macdict
 	gM.mac_ipdict = mac_ipdict
 
