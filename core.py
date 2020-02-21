@@ -437,11 +437,7 @@ class GraphManager(object):
 			edge.attr['minlen'] = '2'
 			edge.attr['penwidth'] = min(max(0.05,connection['connections'] * 1.0 / len(self.graph.nodes())), 2.0)
 		graph.layout(prog=self.args.layoutengine)
-		#graph.draw(filename)
-		dotfilename = '%s.dot' % filename
-		graph.write(dotfilename)
-		os.system('%s -x -Goverlap=scale -Tpdf %s > %s' % (self.args.layoutengine,dotfilename,filename))
-		os.system('rm %s' % dotfilename)
+		graph.draw(filename)
 		self.agraph = graph
 
 	def get_graphviz_format(self, filename=None):

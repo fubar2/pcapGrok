@@ -103,7 +103,7 @@ def doLayer(layer, packets,fname,args, gM):
 							gM.draw(filename = pofn)
 							logger.debug('drew %s %d nodes' % (pofn,nn))
 							if not args.wordcloudsOFF:
-								pofn = 'wordlouds/%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
+								pofn = 'wordclouds/%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
 								if args.outpath:
 									pofn = os.path.join(args.outpath,pofn)
 								gM.wordClouds(pofn,kind)
@@ -128,6 +128,13 @@ def checkmacs(packets):
 		macs = packet[0].src.lower()
 		if any(map(lambda p: packet.haslayer(p), [TCP, UDP])):
 			ips = packet[1].src.lower()
+			try:
+				ipsa = ipaddress.ip_address(ips)
+			except:
+				logger.critical('Got ip = %s - not valid' % (ips))
+				continue
+			if ipa.is_multicast or ips.lower() in ['0.0.0.0','ff.ff.ff.ff','255.255.255.255']:
+				continue
 			existmac =  ip_macdict.get(ips,None)
 			if existmac == None:
 				ip_macdict[ips] = [macs,]
@@ -154,7 +161,8 @@ def checkmacs(packets):
 		if l > maxips:
 			maxips = l
 			maxmac = mac
-	logger.debug('mac = %s, has %s. Is it your router (or if only a few, new dhcp assigned IPs)' % (maxmac,mac_ipdict[maxmac]))
+	if maxmac != None:
+		logger.debug('mac = %s, has %s. Is it your router (or if only a few, new dhcp assigned IPs)' % (maxmac,mac_ipdict[maxmac]))
 	return(ip_macdict,mac_ipdict)
 
 
@@ -481,7 +489,7 @@ if __name__ == '__main__':
 		if args.outpath:
 			if not (os.path.exists(args.outpath)):
 				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
-			if args.pictures: # some drawing so make wordclouds dir
+			if not args.wordcloudsOFF: # some drawing so make wordclouds dir
 				wd = os.path.join(args.outpath,'wordclouds')
 				pathlib.Path(wd).mkdir(parents=True, exist_ok=True)
 			logging.basicConfig(filename=os.path.join(args.outpath,logFileName),filemode='w')
