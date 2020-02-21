@@ -103,7 +103,7 @@ def doLayer(layer, packets,fname,args, gM):
 							gM.draw(filename = pofn)
 							logger.debug('drew %s %d nodes' % (pofn,nn))
 							if not args.wordcloudsOFF:
-								pofn = 'wordlouds/%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
+								pofn = 'wordclouds/%s_destwordcloud_%s_%s_%s' % (kind,NAMEDLAYERS[layer],title,args.pictures)
 								if args.outpath:
 									pofn = os.path.join(args.outpath,pofn)
 								gM.wordClouds(pofn,kind)
