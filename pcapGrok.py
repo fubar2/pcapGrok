@@ -34,10 +34,10 @@ mac_ipdict = {}
 parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
 parser.add_argument('-a', '--append', action='store_true',default=False, required=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
 parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP',required=False)
-parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method. One of sfdp, fdp, circo, neato, twopi or dot',required=False)
+parser.add_argument('-E', '--layoutengine', default='sfdp', nargs='*',help='Graph layout method. One of sfdp, fdp, circo, neato, twopi or dot',required=False)
 parser.add_argument('-fi', '--frequent-in', action='store_true', help='Print frequently contacted nodes to stdout',required=False)
 parser.add_argument('-fo', '--frequent-out', action='store_true', help='Print frequent source nodes to stdout',required=False)
-parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)',required=False)
+parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)',required=False,default=None)
 parser.add_argument('-G', '--geopath', default='/usr/share/GeoIP/GeoLite2-City.mmdb', help='Path to maxmind geodb data',required=False)
 parser.add_argument('-hf', '--hostsfile', required=False, help='Optional hosts file, following the same format as the dns cache file, which will have priority over existing entries in the cache')
 parser.add_argument('-i', '--pcaps', nargs='*',help='Mandatory space delimited list of capture files to be analyzed - wildcards work too - e.g. -i Y*.pcap')
@@ -81,7 +81,7 @@ def doLayer(layer, packets,fname,args, gM):
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
-		logger.info('drew %s  to %s' % (gM.glabel,ofn))
+		logger.info('drew %s %d nodes to %s' % (gM.glabel,len(gM.graph.keys()),ofn))
 		if layer == 3:
 			if not args.wordcloudsOFF:
 				pofn = 'wordclouds/All_%s_wordcloud_%s_%s' % (NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
@@ -149,7 +149,7 @@ def checkmacs(packets):
 			elif not (ips in existip): # new one ? - of interest
 					mac_ipdict[macs].append(ips)
 					if len(mac_ipdict[macs])== 5: # only once
-						logger.debug('#### New ip for mac = %s, now has %s. Is it your router (or if only a few, new dhcp assigned IPs)' % (macs,mac_ipdict[macs]))
+						logger.debug('#### New ip for mac = %s, Is it your router? Now has %s' % (macs,mac_ipdict[macs]))
 			if packet.haslayer(DHCP) : # for kyd
 				dhcpp = packet.getlayer(DHCP)
 				dhcpo = dhcpp.options
@@ -482,7 +482,7 @@ def isScapypcap(ppath):
 
 if __name__ == '__main__':
 	kydknown = None
-	assert args.layoutengine in ['sfdp','fdp','circo','neato','twopi','dot'], "--layoutengine must be one of 'sfdp','fdp','circo','neato','twopi' or 'dot'"
+	assert [x in ['sfdp','fdp','circo','neato','twopi','dot'] for x in args.layoutengine], "--layoutengines must be selected from 'sfdp','fdp','circo','neato','twopi' or 'dot'"
 	# datetime object containing current date and time
 	now = datetime.now()
 	dt = now.strftime("%d/%m/%Y %H:%M:%S")

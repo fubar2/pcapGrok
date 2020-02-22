@@ -12,7 +12,7 @@ Enhancements include
 - wordclouds for all hosts (with 2 or more destinations) showing traffic weighted destinations
 - optional tshark statistics and files - requires tshark to be installed - highly recommended
 
-## RAM and patience will limit the size of input capture files - up to 100MB is manageable..
+## RAM and patience will limit the size of input capture files - 100MB may be manageable but will use 2+G RAM
 Understanding network traffic from IoT devices was the motivation for this code. It works readonably well for relatively small packet
 capture files. A 6MB pcap file with 14K packets, 11 MAC addresses and 34 IP addresses is completed in about 50 seconds on a low end desktop.
 However, a 100MB pcap with about 70k packets requires about 2G of RAM to process and as the graphs become more complex, correspondingly more RAM

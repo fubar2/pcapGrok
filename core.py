@@ -310,7 +310,13 @@ class GraphManager(object):
 				continue # no point
 			ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
 			if ddict == None:
-				lookmeup.append(ip)
+				try:
+					ipa = ipaddress.ip_address(ip)
+				except:
+					logging.warning('IP address %s does not convert using ip_address()' % ip)
+					continue
+				if ipa.is_global:
+					lookmeup.append(ip)
 		if len(lookmeup) > 0:
 			fastdns = parDNS(lookmeup,self.ip_macdict,self.geo_ip,self.geo_lang)
 			drecs = fastdns.doRun()
@@ -436,8 +442,12 @@ class GraphManager(object):
 			edge.attr['fontsize'] = '8'
 			edge.attr['minlen'] = '2'
 			edge.attr['penwidth'] = min(max(0.05,connection['connections'] * 1.0 / len(self.graph.nodes())), 2.0)
-		graph.layout(prog=self.args.layoutengine)
-		graph.draw(filename)
+		for eng in self.args.layoutengine:
+			fs = filename[:-4]
+			ext = filename[-4:]
+			ofname = '%s_%s%s' % (fs,eng,ext)
+			graph.layout(prog=eng)
+			graph.draw(ofname)
 		self.agraph = graph
 
 	def get_graphviz_format(self, filename=None):
@@ -537,62 +547,6 @@ class GraphManager(object):
 					self.logger.debug('2 or fewer weights for node %s' % (snode))
 			self.logger.debug('No weights for node %s' % (snode))				
 				
-	def oldwordClouds(self,outfname,protoc):
-		ipfq = {}
-		graph = self.agraph # assume already drawn
-		for node in self.graph.nodes():
-			dnrec = self.dnsCACHE.get(node,None)
-			if dnrec:
-				fq = dnrec['fqdname']
-				if len(fq) > 0:
-					ipfq[node] = fq
-				else:
-					ipfq[node] = node
-			else:
-				ipfq[node] = node
-		totalbytes = 0
-		weights = {}
-		for edge in graph.edges():
-			src = edge[0]
-			weights[src] = {}
-			for dest in self.graph[edge[0]].keys():
-				destk = ipfq.get(dest,dest)
-				cnx = self.graph[edge[0]][destk]
-				tb = cnx['transmitted']
-				totalbytes += tb
-				if weights[srck].get(destk,None):
-					weights[srck][destk] += tb
-				else:
-					weights[srck][destk] = tb
-		for node in graph.nodes():
-			snode = str(node)
-			dnrec = self.dnsCACHE.get(snode,None)
-			if dnrec:
-				fqname = dnrec['fqdname']
-				whoname = dnrec['whoname']
-				city = dnrec['city']
-				country = dnrec['country']
-			else:
-				fqname = node
-				whoname = ''
-				city = ''
-				country = ''
-			wts = weights.get(fqname,None)
-			if wts and len(wts.keys()) >= 1:
-				nn = len(wts.keys())
-				destfqlist = wts.keys()
-				longname = ' '.join([x for x in (node,fqname,whoname,city,country) if x > ''])
-				wc = WordCloud(background_color="black",width=1200, height=1000,max_words=200,
-				 min_font_size=20, color_func = self.random_color_func).generate_from_frequencies(wts)
-				f = plt.figure(figsize=(10, 10))
-				plt.imshow(wc, interpolation='bilinear')
-				plt.axis('off')
-				plt.title('%s %s traffic destinations' % (longname,protoc), color="indigo")
-				ofnb = '%s%d_%s_%s' % (fqname,nn,outfname)
-				ofn = os.path.join(args.outpath,ofn)
-				f.savefig(ofn, bbox_inches='tight')
-				plt.close(f) 
-
 
 
 
