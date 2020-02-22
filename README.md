@@ -32,7 +32,7 @@ helps focus on the traffic of interest, effectively reducing noise from irreleva
 protocol also helps simplify very complex graphs by breaking them down.
 
 ## Features
-- Draws network topology graphs. Layer 2 = device (mac) traffic flows: 3 = ip traffic flows, 4 = tcp/udp traffic flows
+- Draws network topology graphs. Layer 2 = link, 3 = network, 4 = transport
 - Graph node labels show host FQDN, country and city if available from maxminddb and socket.getfqdn. Otherwise "asn_description" from RDAP whois data is shown.
 - fqdname/whois/geo lookup is threaded (supply -P for slower serial behaviour) and results are saved as cache file - can be reused. These are very informative when there is traffic to and from cloud providers, since they are nearly always identified. Violet nodes are outside the LAN. 
 - Graph node colours are informative - yellow=broadcast, violet = remote, powderblue = LAN
@@ -127,9 +127,9 @@ optional arguments:
 ## "Layers"
 The layers PcapVis offers are:
 
- - device level traffic topology (--layer2), 
- - ip communication (--layer3) and 
- - tcp/udp communication (--layer4)
+ - link (MAC) traffic (--layer2), 
+ - network traffic (--layer3) and 
+ - transport traffic (--layer4) splits layer 3 by port
 
 If none are specified, all three are provided in appropriately named output image files.
 

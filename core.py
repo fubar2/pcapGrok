@@ -149,7 +149,7 @@ class parDNS():
 						if cityrec:
 							city =  cityrec['names'].get(self.geo_lang,None)
 					else:
-						self.logger.error("could not load GeoIP data for ip %s" % iptrim)
+						self.logger.warning("could not load GeoIP data for ip %s" % iptrim)
 			else:
 				self.logger.debug('ip %s has whoname %s and is not a global address so no lookups' % (ip,whoname))
 			ddict['city'] = city
@@ -325,7 +325,7 @@ class GraphManager(object):
 				if self.dnsCACHE.get(k,None):
 					self.logger.warning('Odd - key %s was already in self.dnsCACHE after fast lookup = %s - fast = %s - not replaced' % (k,self.dnsCACHE[k],drecs[k]))
 				else:
-					self.dnsCACHE[k] = drecs[k]
+					self.dnsCACHE[k] = copy.copy(drecs[k])
 					self.logger.debug('## fast looked up %s and added %s' % (k,drecs[k]))
 		else:
 			self.logger.debug('_fast_retrieve_node found no ip addresses missing from dnsCACHE')
@@ -396,7 +396,7 @@ class GraphManager(object):
 			node.attr['width'] = '0.5'
 			node.attr['color'] = 'yellowgreen' # assume all are local hosts
 			node.attr['fontcolor'] = 'darkgreen'
-			node.attr['style'] = 'rounded' ## filled,
+			node.attr['style'] = 'rounded' 
 			snode = str(node)
 			ssnode = snode.split(':')
 			if len(ssnode) <= 2:
