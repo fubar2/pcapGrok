@@ -446,6 +446,7 @@ class GraphManager(object):
 			fs = filename[:-4]
 			ext = filename[-4:]
 			ofname = '%s_%s%s' % (fs,eng,ext)
+			self.logger.debug('Layout = %s to %s for %s' % (eng,ofname,filename))
 			graph.layout(prog=eng)
 			graph.draw(ofname)
 		self.agraph = graph

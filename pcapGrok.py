@@ -34,7 +34,7 @@ mac_ipdict = {}
 parser = ArgumentParser(description='Network packet capture (standard .pcap file) topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
 parser.add_argument('-a', '--append', action='store_true',default=False, required=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
 parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP',required=False)
-parser.add_argument('-E', '--layoutengine', default='sfdp', nargs='*',help='Graph layout method. One of sfdp, fdp, circo, neato, twopi or dot',required=False)
+parser.add_argument('-E', '--layoutengine', default=['sfdp'], nargs='*',help='Graph layout method. Any combination of sfdp, fdp, circo, neato, twopi or dot',required=False)
 parser.add_argument('-fi', '--frequent-in', action='store_true', help='Print frequently contacted nodes to stdout',required=False)
 parser.add_argument('-fo', '--frequent-out', action='store_true', help='Print frequent source nodes to stdout',required=False)
 parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)',required=False,default=None)
@@ -81,7 +81,7 @@ def doLayer(layer, packets,fname,args, gM):
 		if args.outpath:
 			ofn = os.path.join(args.outpath,ofn)
 		gM.draw(filename=ofn)
-		logger.info('drew %s %d nodes to %s' % (gM.glabel,len(gM.graph.keys()),ofn))
+		logger.info('drew %s %d nodes to %s' % (gM.glabel,len(gM.graph.nodes.keys()),ofn))
 		if layer == 3:
 			if not args.wordcloudsOFF:
 				pofn = 'wordclouds/All_%s_wordcloud_%s_%s' % (NAMEDLAYERS[layer],title.replace('+','_'),args.pictures)
