@@ -32,8 +32,15 @@ from queue import Queue
 import logging
 import argparse
 import ipaddress
-from parsezeeklogs import ParseZeekLogs
+import pathlib
+# from parsezeeklogs import ParseZeekLogs
 
+from json import loads, dumps
+from elasticsearch import Elasticsearch, helpers
+from datetime import datetime
+from traceback import print_exc
+import gzip
+import time
 
 DHCP_PORT = 67
 BOOT_REQ = 1
@@ -55,6 +62,237 @@ BROADCASTMAC = "ff:ff:ff:ff:ff:ff"
 ALLBC = ['multicast','igmp','unicast','broadcast','broadcasthost']
 
 PRIVATE = '(Private LAN address)'
+
+NTHREADS = 100
+
+
+class ParseZeekLogs(object):
+	"""Class that parses Zeek logs and allows log data to be output in CSV or json format.
+	Attributes:
+		filepath: Path of Zeek log file to read
+	"""
+
+	def __init__(self, filepath, batchsize=500, fields=None, output_format=None, ignore_keys=[], meta={}, safe_headers=False):
+		if filepath.endswith('.gz'):
+			self.fd = gzip.open(filepath, 'r')
+		else:
+			self.fd = open(filepath,"r")
+		self.options = {} #OrderedDict()
+		self.firstRun = True
+		self.filtered_fields = fields
+		self.batchsize = batchsize
+		self.output_format = output_format
+		self.ignore_keys = ignore_keys
+		self.meta = meta
+		self.safe_headers = safe_headers
+
+		# Convert ' to " in meta string
+		meta = loads(dumps(meta).replace("'", '"'))
+
+		# Read the header option lines
+		l = self.fd.readline().strip()
+		while l != None and l.startswith(b'#'):
+			ld = l.decode('unicode_escape')
+			# Parse the options out
+			if ld.startswith('#separator'):
+				key = ld[1:].split(" ")[0]
+				value = ld[1:].split(" ")[1]
+				self.options[key] = value
+				# Read the next line
+				l = self.fd.readline().strip()
+			elif ld.startswith("#"):
+				lsp = ld[1:].split(self.options.get('separator'))
+				key = lsp[0]
+				value = lsp[1:]
+				self.options[key] = value
+				# Read the next line
+				l = self.fd.readline().strip()
+
+		self.firstLine = l.decode('unicode_escape')
+		# Save mapping of fields to values:
+		self.fields = self.options['fields']
+		self.types = self.options['types']
+
+		# Convert field names if safe_headers is enabled
+		#if self.safe_headers is True:
+		#    for i, val in enumerate(self.fields):
+		#        self.fields[i] = self.fields[i].replace(".", "_")
+
+		self.data_types = {}
+		for i, val in enumerate(self.fields):
+			# Convert field names if safe_headers is enabled
+			if self.safe_headers is True:
+				self.fields[i] = self.fields[i].replace(".", "_")
+
+			# Match types with each other
+			self.data_types[self.fields[i]] = self.types[i]
+
+	def __del__(self):
+		self.fd.close()
+
+	def __iter__(self):
+		return self
+
+	def __next__(self):
+		retVal = ""
+		if self.firstRun is True:
+			retVal = self.firstLine
+			self.firstRun = False
+		else:
+			retVal = self.fd.readline().strip().decode('unicode_escape')
+
+		# If an empty string is returned, readline is done reading
+		if retVal == "" or retVal is None:
+			raise StopIteration
+
+		# Split out the data we are going to return
+		retVal = retVal.split(self.options.get('separator'))
+
+		record = None
+		# Make sure we aren't dealing with a comment line
+		if len(retVal) > 0 and not str(retVal[0]).strip().startswith("#") \
+				and len(retVal) is len(self.options.get("fields")):
+			record = OrderedDict()
+			# Prepare fields for conversion
+			for x in range(0, len(retVal)):
+				if self.safe_headers is True:
+					converted_field_name = self.options.get("fields")[x].replace(".", "_")
+				else:
+					converted_field_name = self.options.get("fields")[x]
+				if self.filtered_fields is None or converted_field_name in self.filtered_fields:
+					# Translate - to "" to fix a conversation error
+					if retVal[x] == "-":
+						retVal[x] = ""
+					# Save the record field if the field isn't filtered out
+					record[converted_field_name] = retVal[x]
+
+			# Convert values to the appropriate record type
+			record = self.convert_values(record, self.ignore_keys, self.data_types)
+
+			if record is not None and self.output_format == "json":
+				# Output will be json
+
+				# Add metadata to json
+				for k, v in self.meta.items():
+					record[k] = v
+
+				retVal = dumps(record)
+			elif record is not None and self.output_format == "csv":
+				retVal = ""
+				# Add escaping to csv format
+				for k, v in record.items():
+					# Add escaping to string values
+					if isinstance(v, str):
+						retVal += str("\"" + str(v).strip() + "\"" + ",")
+					else:
+						retVal += str(str(v).strip() + ",")
+				# Remove the trailing comma
+				retVal = retVal[:-1]
+		else:
+			retVal = None
+
+		return retVal
+
+	def convert_values(self, data, ignore_keys=[], data_types={}):
+		keys_to_delete = []
+		for k, v in data.items():
+			# print("evaluating k: " + str(k) + " v: " + str(v))
+
+			if isinstance(v, dict):
+				data[k] = self.convert_values(v)
+			else:
+				if data_types.get(k) is not None:
+					if (data_types.get(k) == "port" or data_types.get(k) == "count"):
+						if v != "":
+							data[k] = int(v)
+						else:
+							keys_to_delete.append(k)
+					elif (data_types.get(k) == "double" or data_types.get(k) == "interval"):
+						if v != "":
+							data[k] = float(v)
+						else:
+							keys_to_delete.append(k)
+					elif data_types.get(k) == "bool":
+						data[k] = bool(v)
+					else:
+						data[k] = v
+
+		for k in keys_to_delete:
+			del data[k]
+
+		return data
+
+	def get_fields(self):
+		"""Returns all fields present in the log file
+		Returns:
+			A python list containing all field names in the log file
+		"""
+		field_names = ""
+		if self.output_format == "csv":
+			for i, v in enumerate(self.fields):
+				if self.filtered_fields is None or v in self.filtered_fields:
+					field_names += str(v) + ","
+			# Remove the trailing comma
+			field_names = field_names[:-1].strip()
+		else:
+			field_names = []
+			for i, v in enumerate(self.fields):
+				if self.filtered_fields is None or v in self.filtered_fields:
+					field_names.append(v)
+		return field_names
+
+	@staticmethod
+	def bulk_to_elasticsearch(es, bulk_queue):
+		try:
+			helpers.bulk(es, bulk_queue)
+			return True
+		except:
+			print(print_exc())
+			return False
+
+	@staticmethod
+	def batch_to_elk(filepath=None, batch_size=500, fields=None, elk_ip="127.0.0.1", index="zeeklogs", meta={},
+					 ignore_keys=[]):
+		# Create handle to ELK
+		es = Elasticsearch([elk_ip])
+
+		# Create a handle to the log data
+		dataHandle = ParseZeekLogs(filepath, fields=fields, output_format="json", meta=meta)
+
+		# Begin to process and output data
+		dataBatch = []
+		for record in dataHandle:
+			try:
+				record = loads(record)
+
+				if isinstance(record, dict):
+					record["_index"] = index
+					record["_type"] = index
+					try:
+						record['timestamp'] = datetime.utcfromtimestamp(float(record['ts'])).isoformat()
+					except:
+						pass
+
+					dataBatch.append(record)
+
+					if len(dataBatch) >= batch_size:
+						# Batch the queue to ELK
+						# print("Batching to elk: " + str(len(dataBatch)))
+						dataHandle.bulk_to_elasticsearch(es, dataBatch)
+						# Clear the data queue
+						dataBatch = []
+			except:
+				pass
+
+		# Batch the final data to ELK
+		# print("Batching final data to elk: " + str(len(dataBatch)))
+		dataHandle.bulk_to_elasticsearch(es, dataBatch)
+		# Clear the data queue
+		dataBatch = []
+
+	def __str__(self):
+		return dumps(self.data)
+
 
 class parDNS():
 	""" dns/whois lookups parallel for speed
@@ -184,13 +422,13 @@ class ZeekConnGraphManager(object):
 	""" Generates and processes the graph based on packets
 	"""
 
-	def __init__(self, packets, args, dnsCACHE,ip_macdict,mac_ipdict):
+	def __init__(self, args, dnsCACHE,ip_macdict,mac_ipdict):
 		self.logger = logging.getLogger("zeekConnGraphManager")
 		self.logger.setLevel(logging.DEBUG)
 		self.graph = DiGraph()
-		self.layer = layer
 		self.squishPorts = args.squishPorts
 		self.geo_ip = None
+		self.geo_lang = args.geolang
 		self.args = args
 		self.data = {}
 		self.ip_macdict = ip_macdict
@@ -200,7 +438,7 @@ class ZeekConnGraphManager(object):
 			self.geo_ip = maxminddb.open_database(self.args.geopath) # command line -G
 		except:
 			logger.warning("### non fatal but annoying error: could not load GeoIP data from supplied parameter geopath %s so no geographic data can be shown in labels" % self.args.geopath)
-			
+
 	def reset(self, packets, layer, title):
 		""" recycle large structures between plots
 		"""
@@ -242,7 +480,7 @@ class ZeekConnGraphManager(object):
 			else:
 				self.graph.add_edge(src, dst)
 				self.graph[src][dst]['packets'] = [packet,]
-		_fast_retrieve_node_info(self)
+		self._fast_retrieve_node_info()
 		for src, dst in self.graph.edges():
 			self._retrieve_edge_info(src, dst)
 		# print('end init, graph nodes=',self.graph.nodes)
@@ -295,7 +533,7 @@ class ZeekConnGraphManager(object):
 			ns = node.split(':')
 			ip = ns[0]
 			if len(ns) == 8:
-				ip = ns # ipv6?
+				ip = node # ipv6?
 			if len(ns) == 6: # mac
 				continue # no point
 			ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
@@ -413,9 +651,9 @@ class ZeekConnGraphManager(object):
 	def _layer_2_edge(packet):
 		b1 = packet.get('orig_bytes',0)
 		b2 = packet.get('resp_bytes',0)
-		if b1 and b1 != 'False':
+		if b1 and b1 != 'False' and b1 != "True":
 			packet['bytes'] += int(b1)
-		if b2 and b2 != 'False':
+		if b2 and b2 != 'False' and b2 != "True":
 			packet['bytes'] += int(b2)
 		src = packet.get('orig_l2_addr','')	
 		dst = packet.get('resp_l2_addr','NODESTMAC')
@@ -431,9 +669,9 @@ class ZeekConnGraphManager(object):
 			dst = packet.get('id.resp_h','NODESTIP')
 			b1 = packet.get('orig_bytes','0')
 			b2 = packet.get('resp_bytes','0')
-			if b1 and b1 != 'False':
+			if b1 and b1 != 'False' and b1 != "True":
 				packet['bytes'] += int(b1)
-			if b2 and b2 != 'False':
+			if b2 and b2 != 'False' and b2 != "True":
 				packet['bytes'] += int(b2)
 			if not proto in packet['layers']:
 				packet['layers'].append(proto)
@@ -449,9 +687,9 @@ class ZeekConnGraphManager(object):
 			if any(map(lambda p: packet['proto'], ['TCP', 'UDP'])):
 				b1 = packet.get('orig_bytes',0)
 				b2 = packet.get('resp_bytes',0)
-				if b1 and b1 != 'False':
+				if b1 and b1 != 'False' and b1 != "True":
 					packet['bytes'] += int(b1)
-				if b2 and b2 != 'False':
+				if b2 and b2 != 'False' and b2 != "True":
 					packet['bytes'] += int(b2)
 				service = packet.get('service','')
 				proto = packet['proto']
@@ -526,8 +764,14 @@ class ZeekConnGraphManager(object):
 			edge.attr['fontsize'] = '11'
 			edge.attr['minlen'] = '2'
 			edge.attr['penwidth'] = min(max(0.05,8*connection['transmitted']/float(totalbytes)), 8.0)
-		graph.layout(prog=self.args.layoutengine)
-		graph.draw(filename)
+		for eng in self.args.layoutengine:
+			fs = filename[:-4]
+			ext = filename[-4:]
+			ofname = '%s%s%s' % (fs,eng,ext)
+			self.logger.debug('Layout = %s to %s for %s' % (eng,ofname,filename))
+			graph.layout(prog=eng)
+			graph.draw(ofname)
+		self.agraph = graph
 
 	def get_graphviz_format(self, filename=None):
 		agraph = networkx.drawing.nx_agraph.to_agraph(self.graph)
@@ -675,7 +919,7 @@ logging.basicConfig(filename=logFileName,level=logging.INFO,filemode='w')
 parser = ArgumentParser(description='Network Zeek conn log topology and message mapper. Optional protocol whitelist or blacklist and mac restriction to simplify graphs. Draws all 3 layers unless a single one is specified')
 parser.add_argument('-a', '--append', action='store_true',default=True, required=False, help='Append multiple input files before processing as PcapVis previously did. New default is to batch process each input pcap file separately.')
 parser.add_argument('-b', '--blacklist', nargs='*', help='Blacklist of protocols - NONE of the packets having these layers shown eg DNS NTP ARP RTP RIP',required=False)
-parser.add_argument('-E', '--layoutengine', default='sfdp', help='Graph layout method - dot, sfdp etc.',required=False)
+parser.add_argument('-E', '--layoutengine', nargs="*", help='Graph layout method - dot, sfdp etc.',required=False)
 parser.add_argument('-fi', '--frequent-in', action='store_true', help='Print frequently contacted nodes to stdout',required=False)
 parser.add_argument('-fo', '--frequent-out', action='store_true', help='Print frequent source nodes to stdout',required=False)
 parser.add_argument('-g', '--graphviz', help='Graph will be exported for downstream applications to the specified file (dot format)',required=False)
@@ -697,93 +941,96 @@ parser.add_argument('-w', '--whitelist', nargs='*', help='Whitelist of protocols
 args = parser.parse_args()
 
 
-dnsCACHE = {}
-ip_macdict = {}
-mac_ipdict = {}
-
-if len(args.connlog) > 0:
-	if args.outpath:
-		if not (os.path.exists(args.outpath)):
-			pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
-		logging.basicConfig(filename=os.path.join(args.outpath,logFileName),filemode='w')
-	else:
-		logging.basicConfig(filename=logFileName,filemode='w')
-	logger = logging.getLogger('zeekconnlog')
-
-	if args.hostsfile:
-		if os.path.isfile(args.hostsfile):
-			dnsCACHE = readHostsFile(args.hostsfile,{})
-		else:
-			logger.info("## Cannot open hostsfile %s supplied on command line - skipping" % args.hostsfile)
-	else:
-		logger.info("### hostsfile not supplied")
-	if os.path.isfile(dnsCACHEfile):
-		dnsCACHE = readDnsCache(dnsCACHEfile,dnsCACHE)
-		ip_macdict,mac_ipdict = prepipmacdicts(dnsCACHE)
-		# print('ip_macdict',ip_macdict,'mac_ipdict',mac_ipdict)
-	else:
-		logger.info('### No dnsCACHE file %s found. Will create a new one' % dnsCACHEfile)
-else:
-	logger.critical('### No zeek conn log file supplied --connlog is mandatory - stopping')
-	sys.exit(1)
-g = ZeekConnGraphManager(args = args, dnsCACHE=dnsCACHE,ip_macdict=ip_macdict,mac_ipdict=mac_ipdict )
-
-packets = []
-if args.append:
-	for zeekconn in args.connlog:
-		log_iterator = ParseZeekLogs(zeekconn, output_format="csv", safe_headers=False)
-		header = log_iterator.get_fields().split(',')
-		for log_record in log_iterator:
-			if log_record is not None:
-				lrs = log_record.replace('"','').split(',')
-				lr = dict(zip(header,lrs))
-				lr['bytes'] = 0
-				lr['layers'] = []
-				packets.append(lr)
-	# print('packets = ','\n'.join([str(x) for x in packets]))
-	fs = '_'.join(args.connlog)[:50]
-
-	for layer in [2,3,4]:
-		titl = 'Layer %d for data from Zeek connection log %s' % (layer,fs)
-		squishPorts = False
-		args.squishPorts = squishPorts
-		g.reset(packets, layer=layer, title=titl )
-		fn = 'conn_layer%d.pdf' % layer
+if __name__ == "__main__":
+	dnsCACHE = {}
+	ip_macdict = {}
+	mac_ipdict = {}
+	if not args.layoutengine or len(args.layoutengine) < 1:
+		args.layoutengine = ['sfdp']
+	if len(args.connlog) > 0:
 		if args.outpath:
-			fn = os.path.join(args.outpath,fn)
-		g.draw(filename=fn)
-		dnsCACHE = copy.copy(g.dnsCACHE)
-		mac_ipdict = copy.copy(g.mac_ipdict) # these may have been added to...
-		ip_macdict = copy.copy(g.ip_macdict)
-else:
-	for zeekconn in args.connlog:
-		log_iterator = ParseZeekLogs(zeekconn, output_format="csv", safe_headers=False)
-		header = log_iterator.get_fields().split(',')
-		for log_record in log_iterator:
-			if log_record is not None:
-				lrs = log_record.replace('"','').split(',')
-				lr = dict(zip(header,lrs))
-				lr['bytes'] = 0
-				lr['layers'] = []
-				packets.append(lr)
+			if not (os.path.exists(args.outpath)):
+				pathlib.Path(args.outpath).mkdir(parents=True, exist_ok=True)
+			logging.basicConfig(filename=os.path.join(args.outpath,logFileName),filemode='w')
+		else:
+			logging.basicConfig(filename=logFileName,filemode='w')
+		logger = logging.getLogger('zeekconnlog')
+
+		if args.hostsfile:
+			if os.path.isfile(args.hostsfile):
+				dnsCACHE = readHostsFile(args.hostsfile,{})
+			else:
+				logger.info("## Cannot open hostsfile %s supplied on command line - skipping" % args.hostsfile)
+		else:
+			logger.info("### hostsfile not supplied")
+		if os.path.isfile(dnsCACHEfile):
+			dnsCACHE = readDnsCache(dnsCACHEfile,dnsCACHE)
+			ip_macdict,mac_ipdict = prepipmacdicts(dnsCACHE)
+			# print('ip_macdict',ip_macdict,'mac_ipdict',mac_ipdict)
+		else:
+			logger.info('### No dnsCACHE file %s found. Will create a new one' % dnsCACHEfile)
+	else:
+		logger.critical('### No zeek conn log file supplied --connlog is mandatory - stopping')
+		sys.exit(1)
+	g = ZeekConnGraphManager(args = args, dnsCACHE=dnsCACHE,ip_macdict=ip_macdict,mac_ipdict=mac_ipdict )
+	print('dnscache=',dnsCACHE)
+	packets = []
+	if args.append:
+		for zeekconn in args.connlog:
+			log_iterator = ParseZeekLogs(zeekconn, output_format="csv", safe_headers=False)
+			header = log_iterator.get_fields().split(',')
+			for log_record in log_iterator:
+				if log_record is not None:
+					lrs = log_record.replace('"','').split(',')
+					lr = dict(zip(header,lrs))
+					lr['bytes'] = 0
+					lr['layers'] = []
+					packets.append(lr)
 		# print('packets = ','\n'.join([str(x) for x in packets]))
-		fs = zeekconn
+		fs = '_'.join(args.connlog)[:50]
 
 		for layer in [2,3,4]:
 			titl = 'Layer %d for data from Zeek connection log %s' % (layer,fs)
 			squishPorts = False
 			args.squishPorts = squishPorts
 			g.reset(packets, layer=layer, title=titl )
-			fn = '%s_conn_layer%d.pdf' % (fs,layer)
+			fn = 'conn_layer%d.pdf' % layer
 			if args.outpath:
 				fn = os.path.join(args.outpath,fn)
 			g.draw(filename=fn)
 			dnsCACHE = copy.copy(g.dnsCACHE)
+			print('dnscache=',dnsCACHE,'layer',layer)
 			mac_ipdict = copy.copy(g.mac_ipdict) # these may have been added to...
 			ip_macdict = copy.copy(g.ip_macdict)
-	
-print('ip_macdict',ip_macdict)
-print('mac_ipdict',mac_ipdict)
-saveDNS(dnsCACHE,ip_macdict)
+	else:
+		for zeekconn in args.connlog:
+			log_iterator = ParseZeekLogs(zeekconn, output_format="csv", safe_headers=False)
+			header = log_iterator.get_fields().split(',')
+			for log_record in log_iterator:
+				if log_record is not None:
+					lrs = log_record.replace('"','').split(',')
+					lr = dict(zip(header,lrs))
+					lr['bytes'] = 0
+					lr['layers'] = []
+					packets.append(lr)
+			# print('packets = ','\n'.join([str(x) for x in packets]))
+			fs = zeekconn
+
+			for layer in [2,3,4]:
+				titl = 'Layer %d for data from Zeek connection log %s' % (layer,fs)
+				squishPorts = False
+				args.squishPorts = squishPorts
+				g.reset(packets, layer=layer, title=titl )
+				fn = '%s_conn_layer%d.pdf' % (fs,layer)
+				if args.outpath:
+					fn = os.path.join(args.outpath,fn)
+				g.draw(filename=fn)
+				dnsCACHE = copy.copy(g.dnsCACHE)
+				mac_ipdict = copy.copy(g.mac_ipdict) # these may have been added to...
+				ip_macdict = copy.copy(g.ip_macdict)
+		
+	print('ip_macdict',ip_macdict)
+	print('mac_ipdict',mac_ipdict)
+	saveDNS(dnsCACHE,ip_macdict)
 
 

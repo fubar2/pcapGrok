@@ -305,7 +305,7 @@ class GraphManager(object):
 			ns = node.split(':')
 			ip = ns[0]
 			if len(ns) == 8:
-				ip = ns # ipv6?
+				ip = node # ipv6?
 			if len(ns) == 6: # mac
 				continue # no point
 			ddict = self.dnsCACHE.get(ip,None) # index is unadorned ip or mac
