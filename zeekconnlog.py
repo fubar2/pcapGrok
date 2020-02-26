@@ -15,9 +15,6 @@ import networkx
 import itertools
 from networkx import DiGraph
 
-#from scapy.layers.inet import TCP, IP, UDP
-#from scapy.all import *
-#from scapy.layers.http import *
 import logging
 import sys
 import os
@@ -33,7 +30,7 @@ import logging
 import argparse
 import ipaddress
 import pathlib
-# from parsezeeklogs import ParseZeekLogs
+
 
 from json import loads, dumps
 from elasticsearch import Elasticsearch, helpers
@@ -67,17 +64,20 @@ NTHREADS = 100
 
 
 class ParseZeekLogs(object):
-	"""Class that parses Zeek logs and allows log data to be output in CSV or json format.
+	"""
+	Modified to deal with .gz compressed logs. Ross Lazarus feb 2020. Need to deal with bytes rather
+	than strings as that's what gzip gives.
+	Class that parses Zeek logs and allows log data to be output in CSV or json format.
 	Attributes:
 		filepath: Path of Zeek log file to read
 	"""
 
 	def __init__(self, filepath, batchsize=500, fields=None, output_format=None, ignore_keys=[], meta={}, safe_headers=False):
 		if filepath.endswith('.gz'):
-			self.fd = gzip.open(filepath, 'r')
+			self.fd = gzip.open(filepath, 'rb')
 		else:
-			self.fd = open(filepath,"r")
-		self.options = {} #OrderedDict()
+			self.fd = open(filepath,"rb")
+		self.options = OrderedDict()
 		self.firstRun = True
 		self.filtered_fields = fields
 		self.batchsize = batchsize
@@ -966,14 +966,12 @@ if __name__ == "__main__":
 		if os.path.isfile(dnsCACHEfile):
 			dnsCACHE = readDnsCache(dnsCACHEfile,dnsCACHE)
 			ip_macdict,mac_ipdict = prepipmacdicts(dnsCACHE)
-			# print('ip_macdict',ip_macdict,'mac_ipdict',mac_ipdict)
 		else:
 			logger.info('### No dnsCACHE file %s found. Will create a new one' % dnsCACHEfile)
 	else:
 		logger.critical('### No zeek conn log file supplied --connlog is mandatory - stopping')
 		sys.exit(1)
 	g = ZeekConnGraphManager(args = args, dnsCACHE=dnsCACHE,ip_macdict=ip_macdict,mac_ipdict=mac_ipdict )
-	print('dnscache=',dnsCACHE)
 	packets = []
 	if args.append:
 		for zeekconn in args.connlog:
@@ -986,7 +984,6 @@ if __name__ == "__main__":
 					lr['bytes'] = 0
 					lr['layers'] = []
 					packets.append(lr)
-		# print('packets = ','\n'.join([str(x) for x in packets]))
 		fs = '_'.join(args.connlog)[:50]
 
 		for layer in [2,3,4]:
@@ -999,7 +996,6 @@ if __name__ == "__main__":
 				fn = os.path.join(args.outpath,fn)
 			g.draw(filename=fn)
 			dnsCACHE = copy.copy(g.dnsCACHE)
-			print('dnscache=',dnsCACHE,'layer',layer)
 			mac_ipdict = copy.copy(g.mac_ipdict) # these may have been added to...
 			ip_macdict = copy.copy(g.ip_macdict)
 	else:
@@ -1013,7 +1009,6 @@ if __name__ == "__main__":
 					lr['bytes'] = 0
 					lr['layers'] = []
 					packets.append(lr)
-			# print('packets = ','\n'.join([str(x) for x in packets]))
 			fs = zeekconn
 
 			for layer in [2,3,4]:
