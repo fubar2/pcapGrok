@@ -173,7 +173,7 @@ dc:a6:32:41:12:99        Router                 (Private LAN address)    dc:a6:3
 
 **Drawing a communication graph (layer 2), segment**
 ```
-python main.py -i tests/test.pcap -o test2.png --layer2
+python pcapGrok.py -i tests/test.pcap -o test2.png --layer2
 ```
 
 ![layer 2 sample](tests/test2.png)
